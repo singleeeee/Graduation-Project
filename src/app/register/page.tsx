@@ -5,11 +5,14 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { registrationSchema, type RegistrationFormData } from '@/lib/validations'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { useAppStore } from '@/store'
 import { useMutation } from '@tanstack/react-query'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
+import { authApi } from '@/lib/api'
+import { useAppStore } from '@/store'
 
 export default function RegisterPage() {
+  const router = useRouter()
   const { setUser } = useAppStore()
   
   const {
@@ -22,24 +25,58 @@ export default function RegisterPage() {
 
   const registerMutation = useMutation({
     mutationFn: async (data: RegistrationFormData) => {
-      // 模拟API调用
-      await new Promise(resolve => setTimeout(resolve, 1500))
-      return {
-        id: `candidate-${Date.now()}`,
+      const registerData = {
         name: data.name,
         email: data.email,
-        role: 'candidate' as const,
+        password: data.password,
         phone: data.phone,
         major: data.major,
-        grade: data.grade
+        grade: data.grade,
+        experience: data.experience,
+        motivation: data.motivation
+      }
+      
+      const response = await authApi.register(registerData)
+      return response
+    },
+    onSuccess: (response) => {
+      console.log('注册响应:', response)
+      // 处理两种可能的响应格式
+      let loginData = response
+      
+      // 如果响应是ApiResponse包装格式
+      const apiResponse = response as any
+      if (apiResponse && apiResponse.data && apiResponse.data.accessToken) {
+        loginData = apiResponse.data
+      }
+      
+      // 注册成功后自动登录
+      if (loginData && loginData.accessToken && loginData.refreshToken && loginData.user) {
+        // 保存token到localStorage
+        authApi.setTokens(loginData.accessToken, loginData.refreshToken)
+        
+        // 更新用户状态
+        setUser({
+          id: loginData.user.id,
+          name: loginData.user.name,
+          email: loginData.user.email,
+          role: loginData.user.role
+        })
+        
+        // 跳转到主页
+        router.push('/')
+      } else {
+        console.log('注册响应数据不完整:', response)
+        alert('注册成功！请登录您的账号')
       }
     },
-    onSuccess: (userData) => {
-      setUser(userData)
-      alert('注册成功！欢迎加入招新系统')
-    },
-    onError: () => {
-      alert('注册失败，请检查填写信息')
+    onError: (error) => {
+      console.error('注册失败详细错误:', error)
+      if (error?.message) {
+        alert(`注册失败: ${error.message}`)
+      } else {
+        alert('注册失败，请检查填写信息')
+      }
     }
   })
 
@@ -92,6 +129,38 @@ export default function RegisterPage() {
               />
               {errors.email && (
                 <p className="mt-1 text-sm text-red-600">{errors.email.message}</p>
+              )}
+            </div>
+
+            <div>
+              <label htmlFor="password" className="block text-sm font-medium text-gray-700">
+                密码 *
+              </label>
+              <Input
+                id="password"
+                type="password"
+                {...register('password')}
+                className="mt-1"
+                placeholder="请输入密码（至少6位）"
+              />
+              {errors.password && (
+                <p className="mt-1 text-sm text-red-600">{errors.password.message}</p>
+              )}
+            </div>
+
+            <div>
+              <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700">
+                确认密码 *
+              </label>
+              <Input
+                id="confirmPassword"
+                type="password"
+                {...register('confirmPassword')}
+                className="mt-1"
+                placeholder="请再次输入密码"
+              />
+              {errors.confirmPassword && (
+                <p className="mt-1 text-sm text-red-600">{errors.confirmPassword.message}</p>
               )}
             </div>
             
