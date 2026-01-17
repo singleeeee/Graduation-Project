@@ -7,9 +7,11 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useAppStore } from '@/store'
 import { useMutation } from '@tanstack/react-query'
+import { useRouter } from 'next/navigation'
 
 export default function LoginPage() {
   const { setUser } = useAppStore()
+  const router = useRouter()
   
   const {
     register,
@@ -23,19 +25,42 @@ export default function LoginPage() {
     mutationFn: async (data: LoginFormData) => {
       // 模拟API调用
       await new Promise(resolve => setTimeout(resolve, 1000))
-      return {
-        id: '1',
-        name: '张三',
-        email: data.email,
-        role: 'admin'
+      console.log(data)
+      // 根据邮箱判断用户角色
+      const isAdmin = data.email.includes('admin')
+      const isCandidate = data.email.includes('candidate')
+      
+      if (isAdmin) {
+        return {
+          id: 'admin-1',
+          name: '管理员',
+          email: data.email,
+          role: 'admin'
+        }
+      } else if (isCandidate) {
+        return {
+          id: 'candidate-1',
+          name: '李四',
+          email: data.email,
+          role: 'candidate'
+        }
+      } else {
+        // 默认为候选人
+        return {
+          id: 'candidate-2',
+          name: '王五',
+          email: data.email,
+          role: 'candidate'
+        }
       }
     },
     onSuccess: (userData) => {
+      console.log(1)
       setUser(userData)
-      alert('登录成功！')
+      router.push('/')
     },
     onError: () => {
-      alert('登录失败，请检查邮箱和密码')
+      console.log('登录失败，请检查邮箱和密码')
     }
   })
 
