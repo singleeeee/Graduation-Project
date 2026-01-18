@@ -32,11 +32,13 @@ export default function RegisterPage() {
         name: data.name,
         email: data.email,
         password: data.password,
-        phone: data.phone,
-        major: data.major,
-        grade: data.grade,
-        experience: data.experience,
-        motivation: data.motivation
+        profileFields: {
+          phone: data.phone,
+          major: data.major,
+          grade: data.grade,
+          experience: data.experience,
+          motivation: data.motivation
+        }
       }
       
       const response = await authApi.register(registerData)
@@ -53,8 +55,8 @@ export default function RegisterPage() {
 
       if (loginData.user) {
         setUser(loginData.user)
-        if (loginData.token) {
-          localStorage.setItem('token', loginData.token)
+        if (loginData.accessToken) {
+          localStorage.setItem('token', loginData.accessToken)
         }
         setShowSuccessAlert(true)
         setTimeout(() => {

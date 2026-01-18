@@ -1,8 +1,10 @@
 'use client'
 
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
+import { useMenuItems } from '@/hooks/use-permissions'
 
 interface AdminDashboardProps {
   user: {
@@ -15,44 +17,16 @@ interface AdminDashboardProps {
 }
 
 export function AdminDashboard({ user, logout }: AdminDashboardProps) {
-  const menuItems = [
-    {
-      title: '仪表盘',
-      icon: '📊',
-      href: '/',
-      current: true,
-    },
-    {
-      title: '招新管理',
-      icon: '👥',
-      href: '/recruitment',
-      current: false,
-    },
-    {
-      title: '简历筛选',
-      icon: '📋',
-      href: '/screening',
-      current: false,
-    },
-    {
-      title: '面试安排',
-      icon: '📅',
-      href: '/interview',
-      current: false,
-    },
-    {
-      title: '数据统计',
-      icon: '📈',
-      href: '/statistics',
-      current: false,
-    },
-    {
-      title: '系统设置',
-      icon: '⚙️',
-      href: '/settings',
-      current: false,
-    },
-  ]
+  // 获取当前路径用于菜单高亮
+  const [currentPath, setCurrentPath] = useState('/')
+  
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setCurrentPath(window.location.pathname)
+    }
+  }, [])
+  
+  const menuItems = useMenuItems(currentPath)
 
   return (
     <DashboardLayout

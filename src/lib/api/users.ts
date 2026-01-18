@@ -1,27 +1,79 @@
 import axiosService, { ApiResponse } from '../axios'
 
+// 用户角色信息
+export interface UserRole {
+  id: string
+  name: string
+  code: 'admin' | 'candidate' | 'interviewer'
+}
+
+// 用户状态
+export type UserStatus = 'active' | 'inactive' | 'suspended'
+
 // 用户资料接口（从 auth 导入以避免循环依赖）
 export interface UserProfile {
   id: string
   name: string
   email: string
-  phone?: string
+  status: UserStatus
+  avatar?: string
+  role: UserRole | string // 后端可能返回对象或字符串角色
+  // 常用动态字段
   studentId?: string
+  college?: string
   major?: string
   grade?: string
-  role: 'admin' | 'candidate' | 'interviewer'
-  avatar?: string
+  phone?: string
+  experience?: string
+  motivation?: string
+  // 完整档案字段映射
+  profileFields?: { [key: string]: string }
   createdAt: string
   updatedAt: string
 }
 
-// 更新用户资料请求
-export interface UpdateProfileRequest {
+// 更新用户基本资料请求
+export interface UpdateBasicInfoRequest {
   name?: string
-  phone?: string
-  major?: string
-  grade?: string
   avatar?: string
+}
+
+// 更新用户档案字段请求
+export interface UpdateProfileFieldsRequest {
+  profileFields: { [key: string]: string }
+}
+
+// 档案字段选项
+export interface ProfileFieldOption {
+  label: string
+  value: string
+}
+
+// 档案字段配置
+export interface ProfileFieldConfig {
+  id: string
+  fieldName: string
+  fieldLabel: string
+  fieldType: 'text' | 'email' | 'select' | 'textarea' | 'file' | 'date' | 'number'
+  isRequired: boolean
+  placeholder?: string
+  helpText?: string
+  options?: {
+    options: ProfileFieldOption[]
+  }
+  validationRules?: {
+    minLength?: number
+    maxLength?: number
+    pattern?: string
+    custom?: any
+  }
+  currentValue: string
+  fileId?: string | null
+}
+
+// 档案字段配置响应
+export interface ProfileFieldsConfigResponse {
+  fields: ProfileFieldConfig[]
 }
 
 // 修改密码请求
@@ -63,10 +115,34 @@ class UsersApi {
   }
 
   /**
-   * 更新当前用户资料
+   * 更新用户基本资料
    */
-  async updateProfile(data: UpdateProfileRequest): Promise<UserProfile> {
-    const response = await this.axios.put<UserProfile>('/users/profile', data)
+  async updateBasicInfo(data: UpdateBasicInfoRequest): Promise<UserProfile> {
+    const response = await this.axios.put<UserProfile>('/users/profile/basic', data)
+    return response.data
+  }
+
+  /**
+   * 更新用户档案字段
+   */
+  async updateProfileFields(data: UpdateProfileFieldsRequest): Promise<{
+    message: string
+    updatedFields: string[]
+    profileFields: { [key: string]: string }
+  }> {
+    const response = await this.axios.put<{
+      message: string
+      updatedFields: string[]
+      profileFields: { [key: string]: string }
+    }>('/users/profile/fields', data)
+    return response.data
+  }
+
+  /**
+   * 获取用户档案字段配置
+   */
+  async getProfileFieldsConfig(): Promise<ProfileFieldsConfigResponse> {
+    const response = await this.axios.get<ProfileFieldsConfigResponse>('/users/profile/fields-config')
     return response.data
   }
 
@@ -97,7 +173,7 @@ class UsersApi {
    * 获取用户列表（需要管理员权限）
    */
   async getUsers(params: UserListParams = {}): Promise<UserListResponse> {
-    const response = await this.axios.get<UserListResponse>('/users', {
+    const response = await this.axios.get<UserListResponse>('/admin/users', {
       params
     })
     return response.data

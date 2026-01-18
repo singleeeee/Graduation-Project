@@ -17,7 +17,7 @@ export async function loginAndSetUser(email: string, password: string) {
       id: userProfile.id,
       name: userProfile.name,
       email: userProfile.email,
-      role: userProfile.role
+      role: typeof userProfile.role === 'object' ? userProfile.role?.code || userProfile.role?.name : userProfile.role
     })
     
     return userProfile
@@ -91,7 +91,7 @@ export async function initializeAuth(): Promise<boolean> {
       id: userProfile.id,
       name: userProfile.name,
       email: userProfile.email,
-      role: userProfile.role
+      role: typeof userProfile.role === 'object' ? userProfile.role?.code || userProfile.role?.name : userProfile.role
     })
     
     return true

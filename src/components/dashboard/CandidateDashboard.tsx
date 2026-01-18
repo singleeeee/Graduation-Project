@@ -1,5 +1,6 @@
 'use client'
 
+import { useState, useEffect } from 'react'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -18,30 +19,39 @@ interface CandidateDashboardProps {
 }
 
 export function CandidateDashboard({ user, logout }: CandidateDashboardProps) {
+  // 获取当前路径用于菜单高亮
+  const [currentPath, setCurrentPath] = useState('/')
+  
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setCurrentPath(window.location.pathname)
+    }
+  }, [])
+  
   const candidateMenuItems = [
     {
       title: '我的申请',
       icon: '📝',
       href: '/application',
-      current: true
+      current: currentPath === '/application'
     },
     {
       title: '个人信息',
       icon: '👤',
       href: '/profile',
-      current: false
+      current: currentPath === '/profile'
     },
     {
       title: '面试安排',
       icon: '📅',
       href: '/interviews',
-      current: false
+      current: currentPath === '/interviews'
     },
     {
       title: '申请记录',
       icon: '📋',
       href: '/history',
-      current: false
+      current: currentPath === '/history'
     }
   ]
 
