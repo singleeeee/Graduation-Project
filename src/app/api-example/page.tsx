@@ -21,6 +21,9 @@ export default function ApiExamplePage() {
   // 刷新令牌测试
   const refreshTokenMutation = useMutation({
     mutationFn: async () => {
+      if (typeof window === 'undefined') {
+        throw new Error('无法在服务端环境下刷新令牌')
+      }
       const token = localStorage.getItem('refresh_token')
       if (!token) {
         throw new Error('没有refreshToken')
@@ -132,8 +135,8 @@ export default function ApiExamplePage() {
               <h3 className="font-medium mb-2">当前令牌状态:</h3>
               <div className="text-sm space-y-1">
                 <p>认证状态: {authApi.isAuthenticated() ? '✅ 已登录' : '❌ 未登录'}</p>
-                <p>AccessToken: {localStorage.getItem('access_token') ? '✅ 存在' : '❌ 不存在'}</p>
-                <p>RefreshToken: {localStorage.getItem('refresh_token') ? '✅ 存在' : '❌ 不存在'}</p>
+            <p>AccessToken: {(typeof window !== 'undefined' && localStorage.getItem('access_token')) ? '✅ 存在' : '❌ 不存在'}</p>
+            <p>RefreshToken: {(typeof window !== 'undefined' && localStorage.getItem('refresh_token')) ? '✅ 存在' : '❌ 不存在'}</p>
               </div>
             </div>
             

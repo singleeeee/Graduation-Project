@@ -5,10 +5,14 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { loginSchema, type LoginFormData } from '@/lib/validations'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import { useAppStore } from '@/store'
 import { useMutation } from '@tanstack/react-query'
 import { useRouter } from 'next/navigation'
 import { loginAndSetUser } from '@/lib/auth'
+import { AlertCircle } from 'lucide-react'
 
 export default function LoginPage() {
   const { setUser } = useAppStore()
@@ -40,56 +44,63 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <div className="max-w-md w-full space-y-8">
-        <div>
-          <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-            招新管理系统登录
-          </h2>
-        </div>
-        <form className="mt-8 space-y-6" onSubmit={handleSubmit(onSubmit)}>
-          <div className="space-y-4">
-            <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-                邮箱
-              </label>
-              <Input
-                id="email"
-                type="email"
-                {...register('email')}
-                className="mt-1"
-                placeholder="请输入邮箱"
-              />
-              {errors.email && (
-                <p className="mt-1 text-sm text-red-600">{errors.email.message}</p>
-              )}
-            </div>
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
+      <div className="max-w-md md:max-w-lg w-full">
+        <Card className="backdrop-blur-sm bg-white/70">
+          <CardHeader className="text-center">
+            <CardTitle className="text-3xl font-bold">招新管理系统登录</CardTitle>
+            <CardDescription>使用您的账号登录系统</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {loginMutation.error && (
+              <Alert variant="destructive" className="mb-4">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>
+                  登录失败，请检查您的邮箱和密码
+                </AlertDescription>
+              </Alert>
+            )}
             
-            <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700">
-                密码
-              </label>
-              <Input
-                id="password"
-                type="password"
-                {...register('password')}
-                className="mt-1"
-                placeholder="请输入密码"
-              />
-              {errors.password && (
-                <p className="mt-1 text-sm text-red-600">{errors.password.message}</p>
-              )}
-            </div>
-          </div>
+            <form className="space-y-6" onSubmit={handleSubmit(onSubmit)}>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="email">邮箱</Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    {...register('email')}
+                    placeholder="请输入邮箱"
+                  />
+                  {errors.email && (
+                    <p className="text-sm text-destructive">{errors.email.message}</p>
+                  )}
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="password">密码</Label>
+                  <Input
+                    id="password" 
+                    type="password"
+                    autoComplete="current-password"
+                    {...register('password')}
+                    placeholder="请输入密码"
+                  />
+                  {errors.password && (
+                    <p className="text-sm text-destructive">{errors.password.message}</p>
+                  )}
+                </div>
+              </div>
 
-          <Button
-            type="submit"
-            className="w-full"
-            disabled={loginMutation.isPending}
-          >
-            {loginMutation.isPending ? '登录中...' : '登录'}
-          </Button>
-        </form>
+              <Button
+                type="submit"
+                className="w-full"
+                disabled={loginMutation.isPending}
+              >
+                {loginMutation.isPending ? '登录中...' : '登录'}
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
       </div>
     </div>
   )

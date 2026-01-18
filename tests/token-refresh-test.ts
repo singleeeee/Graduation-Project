@@ -53,7 +53,7 @@ async function testTokenRefresh() {
     console.log('令牌验证成功:', validateResponse.data)
     
   } catch (error) {
-    console.error('测试失败:', error.response?.data || error.message)
+    console.error('测试失败:', (error as any)?.response?.data || (error as any)?.message || error)
   }
 }
 
@@ -83,7 +83,7 @@ async function testAutoRefresh() {
         }
       })
     } catch (error) {
-      if (error.response?.status === 401) {
+      if ((error as any)?.response?.status === 401) {
         console.log('✓ 成功触发401错误')
       }
     }
@@ -97,7 +97,7 @@ async function testAutoRefresh() {
     console.log('刷新成功:', refreshResponse.data)
     
   } catch (error) {
-    console.error('自动刷新测试失败:', error.response?.data || error.message)
+    console.error('自动刷新测试失败:', (error as any)?.response?.data || (error as any)?.message || error)
   }
 }
 
@@ -132,7 +132,7 @@ async function testTokenExpiration() {
     }
     
   } catch (error) {
-    console.error('过期时间测试失败:', error.response?.data || error.message)
+    console.error('过期时间测试失败:', (error as any)?.response?.data || (error as any)?.message || error)
   }
 }
 
