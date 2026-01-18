@@ -54,7 +54,7 @@ export const SidebarContainer = ({ children, className = '', theme }: SidebarPro
   return (
     <div className={`
       fixed inset-y-0 left-0 z-50 w-64 bg-white shadow-lg transform transition-transform duration-300 ease-in-out
-      lg:translate-x-0 lg:static lg:inset-0 h-screen
+      lg:translate-x-0 lg:static lg:inset-0
       ${isOpen ? 'translate-x-0' : '-translate-x-full'}
       ${className}
     `}>
@@ -70,7 +70,7 @@ export const SidebarHeader = ({ children, className = '' }: { children: React.Re
 )
 
 export const SidebarContent = ({ children, className = '' }: { children: React.ReactNode, className?: string }) => (
-  <nav className={`flex-1 px-4 py-6 space-y-2 ${className}`}>
+  <nav className={`flex-1 px-4 py-6 space-y-2 overflow-y-auto ${className}`}>
     {children}
   </nav>
 )
@@ -148,7 +148,7 @@ export function DashboardLayout({ user, logout, children, menuItems, title, them
 
   return (
     <SidebarContext.Provider value={{ isOpen, toggleSidebar }}>
-      <div className="flex min-h-screen bg-gray-50">
+      <div className="flex h-screen bg-gray-50 overflow-hidden">
       {/* 移动端侧边栏遮罩 */}
       {isOpen && (
         <div 
@@ -259,7 +259,7 @@ export function DashboardLayout({ user, logout, children, menuItems, title, them
         </header>
 
         {/* Page content */}
-        <main className="flex-1 px-4 py-6 lg:px-8">
+        <main className="flex-1 overflow-y-auto px-4 py-6 lg:px-8">
           {children}
         </main>
       </div>
