@@ -259,7 +259,7 @@ export function DashboardLayout({ user, logout, children, menuItems, title, them
         </header>
 
         {/* Page content */}
-        <main className="flex-1 overflow-y-auto px-4 py-6 lg:px-8">
+        <main className="flex-1 overflow-y-auto px-2 py-4 lg:px-6">
           {children}
         </main>
       </div>

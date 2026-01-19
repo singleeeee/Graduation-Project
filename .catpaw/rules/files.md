@@ -100,19 +100,28 @@ ruleType: "Model Request"
 └── lib/
     ├── api/                        # API 客户端封装
     │   ├── index.ts               # API 统一导出
-    │   ├── auth.ts                # 认证相关 API
-    │   ├── users.ts               # 用户管理 API
-    │   ├── recruitment.ts         # 招新管理 API
-    │   ├── applications.ts        # 申请管理 API
+    │   ├── auth/                  # 认证 API 模块
+    │   │   ├── types.ts           # 认证相关类型定义
+    │   │   └── index.ts           # 认证 API 实现
+    │   ├── users/                 # 用户管理 API 模块
+    │   │   ├── types.ts           # 用户相关类型定义
+    │   │   └── index.ts           # 用户管理 API 实现
+    │   ├── clubs/                 # 社团管理 API 模块
+    │   │   ├── types.ts           # 社团相关类型定义
+    │   │   └── index.ts           # 社团管理 API 实现
+    │   ├── registration-fields/   # 注册字段 API 模块
+    │   │   ├── types.ts           # 注册字段类型定义
+    │   │   └── index.ts           # 注册字段 API 实现
     │   └── __tests__/            # API 测试文件
     │       └── auth.test.ts
     │
     ├── axios.ts                  # Axios 封装和配置
     ├── auth.ts                   # 认证工具函数
-    ├── validations.ts            # 数据验证规则 (Zod schemas)
     ├── query-client.tsx          # React Query 配置
-    ├── utils.ts                  # 通用工具函数
-    └── constants.ts              # 常量定义
+    └── utils/                    # 工具函数集
+        ├── utils.ts             # 通用工具函数
+        ├── validations.ts       # 数据验证规则 (Zod schemas)
+        └── constants.ts         # 常量定义
 ```
 
 #### `src/store/` - Zustand 状态管理

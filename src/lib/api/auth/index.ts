@@ -1,58 +1,20 @@
-import axiosService, { ApiResponse } from '../axios'
+import axiosService from '../../axios'
+import type {
+  LoginRequest,
+  RegisterRequest,
+  LoginResponse,
+  RefreshTokenRequest,
+  UserProfileBasic
+} from './types'
 
-// 登录请求数据
-export interface LoginRequest {
-  email: string
-  password: string
-}
-
-// 注册请求数据
-export interface RegisterRequest {
-  name: string
-  email: string
-  password: string
-  phone?: string
-  studentId?: string
-  major?: string
-  grade?: string
-  experience?: string
-  motivation?: string
-}
-
-// 登录响应数据
-export interface LoginResponse {
-  accessToken: string
-  refreshToken: string
-  expiresIn?: number
-  user: {
-    id: string
-    name: string
-    email: string
-    role: 'admin' | 'candidate' | 'interviewer'
-    major?: string
-    grade?: string
-  }
-}
-
-// 刷新令牌请求
-export interface RefreshTokenRequest {
-  refreshToken: string
-}
-
-// 用户资料响应
-export interface UserProfile {
-  id: string
-  name: string
-  email: string
-  phone?: string
-  studentId?: string
-  major?: string
-  grade?: string
-  role: 'admin' | 'candidate' | 'interviewer'
-  avatar?: string
-  createdAt: string
-  updatedAt: string
-}
+// 导出类型以供其他模块使用
+export type {
+  LoginRequest,
+  RegisterRequest,
+  LoginResponse,
+  RefreshTokenRequest,
+  UserProfileBasic
+} from './types'
 
 // 认证 API 类
 class AuthApi {
@@ -119,8 +81,8 @@ class AuthApi {
   /**
    * 验证当前令牌是否有效
    */
-  async validateToken(): Promise<{ valid: boolean; user: UserProfile }> {
-    const response = await this.axios.get<{ valid: boolean; user: UserProfile }>('/auth/validate')
+  async validateToken(): Promise<{ valid: boolean; user: UserProfileBasic }> {
+    const response = await this.axios.get<{ valid: boolean; user: UserProfileBasic }>('/auth/validate')
     return response.data
   }
 

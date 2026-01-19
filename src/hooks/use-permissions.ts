@@ -48,6 +48,7 @@ export const ROLE_PERMISSIONS: Record<string, Permission[]> = {
 // 菜单项权限要求
 export const MENU_PERMISSIONS: Record<string, Permission[]> = {
   '/admin/users': ['user_view'],
+  '/admin/clubs': ['user_view'], // 社团管理使用用户查看权限或创建新的社团管理权限
   '/admin/registration-fields': ['registration_field_manage'],
   '/recruitment': ['recruitment_view'],
   '/screening': ['application_review'],
@@ -158,6 +159,13 @@ export function useMenuItems(currentPath: string = '/'): MenuItem[] {
       icon: '👤',
       href: '/admin/users',
       current: currentPath.startsWith('/admin/users'),
+      permission: 'user_view',
+    },
+    {
+      title: '社团管理',
+      icon: '🏢',
+      href: '/admin/clubs',
+      current: currentPath.startsWith('/admin/clubs'),
       permission: 'user_view',
     },
     {

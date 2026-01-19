@@ -79,16 +79,25 @@ src/
 
 ├── lib/                         # 核心工具库
 │   ├── api/                    # API 封装层
-│   │   ├── auth.ts            # 认证 API
-│   │   ├── users.ts           # 用户 API
-│   │   ├── recruitment.ts     # 招新 API
-│   │   ├── applications.ts    # 申请 API
+│   │   ├── auth/              # 认证 API 模块
+│   │   │   ├── types.ts        # 认证相关类型定义
+│   │   │   └── index.ts        # 认证 API 实现
+│   │   ├── users/             # 用户 API 模块
+│   │   │   ├── types.ts        # 用户相关类型定义
+│   │   │   └── index.ts        # 用户 API 实现
+│   │   ├── clubs/             # 社团 API 模块
+│   │   │   ├── types.ts        # 社团相关类型定义
+│   │   │   └── index.ts        # 社团 API 实现
+│   │   ├── registration-fields/ # 注册字段 API 模块
+│   │   │   ├── types.ts        # 注册字段类型定义
+│   │   │   └── index.ts        # 注册字段 API 实现
 │   │   └── index.ts           # API 统一导出
 │   ├── axios.ts               # Axios 封装
 │   ├── auth.ts                # 认证工具函数
-│   ├── validations.ts         # 数据验证规则
 │   ├── query-client.tsx       # React Query 配置
-│   └── utils.ts               # 通用工具函数
+│   └── utils/                 # 工具函数集
+│       ├── utils.ts          # 通用工具函数
+│       └── validations.ts    # 数据验证规则
 
 ├── store/                      # 状态管理
 │   ├── index.ts               # 全局状态 (Zustand)
@@ -308,6 +317,64 @@ const applicationStatusFlow = {
 - Props 类型定义和说明
 - 使用示例和场景说明
 - 注意事项和边界情况
+
+## 🔄 API 模块结构调整说明
+
+### 📁 新的模块化结构
+
+为了提高代码的可维护性和可扩展性，API 层进行了模块化重构：
+
+**之前:**
+```
+src/lib/api/
+├── auth.ts
+├── users.ts
+├── clubs.ts
+└── registration-fields.ts
+```
+
+**现在:**
+```
+src/lib/api/
+├── auth/
+│   ├── types.ts     # 类型定义
+│   └── index.ts     # API 实现
+├── users/
+│   ├── types.ts     # 类型定义
+│   └── index.ts     # API 实现
+├── clubs/
+│   ├── types.ts     # 类型定义
+│   └── index.ts     # API 实现
+└── registration-fields/
+    ├── types.ts     # 类型定义
+    └── index.ts     # API 实现
+```
+
+### 🎯 结构调整的优势
+
+1. **🔧 关注点分离**: 类型定义和实现逻辑分离，便于维护
+2. **📦 模块化组织**: 每个功能模块独立，便于扩展
+3. **📋 类型安全性**: 独立的类型文件确保类型一致性
+4. **🚀 开发效率**: 便于多人协作开发，减少冲突
+
+### 📝 使用示例
+
+**导入 API:**
+```typescript
+import { authApi, usersApi, clubsApi } from '@/lib/api'
+```
+
+**导入类型:**
+```typescript
+import type { UserProfile, Club, LoginRequest } from '@/lib/api'
+```
+
+### 🔄 向后兼容性
+
+重构保持了完整的向后兼容性：
+- 统一导出入口保持不变 (`src/lib/api/index.ts`)
+- 所有现有导入路径继续有效
+- API 接口签名不变
 
 ---
 
