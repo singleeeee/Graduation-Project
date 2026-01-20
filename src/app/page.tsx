@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react'
 import { useAppStore } from '@/store'
 import { authApi } from '@/lib/api'
-import { initializeAuth } from '@/lib/auth'
+import { initializeAuth, isAuthenticated } from '@/lib/auth'
 import { AdminDashboard } from '@/components/dashboard/AdminDashboard'
 import { CandidateDashboard } from '@/components/dashboard/CandidateDashboard'
 import WelcomePage from '@/components/pages/WelcomePage'
@@ -35,7 +35,7 @@ export default function Home() {
   }
 
   // 只在客户端检查认证状态
-  if (!authApi.isAuthenticated()) {
+  if (!authApi.isAuthenticated() || !isAuthenticated()) {
     return <WelcomePage />
   }
 

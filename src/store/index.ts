@@ -58,7 +58,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   isAdmin: () => {
     const { user } = get()
-    return user.role === 'admin'
+    return user.role === 'super_admin'
   },
   isCandidate: () => {
     const { user } = get()

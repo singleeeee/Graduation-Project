@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useAppStore } from '@/store'
 import { useToast } from '@/hooks/use-toast'
 import {
   Search,
@@ -1181,9 +1182,15 @@ export default function ClubManagementPage() {
     <ProtectedRoute permission="user_view">
       <ClubManagementPageContent 
         user={{ id: 'admin-1', name: '超级管理员', email: 'admin@example.com', role: 'system_admin' }} 
-        logout={() => {
-          localStorage.removeItem('token')
-          window.location.href = '/login'
+        logout={async () => {
+          try {
+            const { logout: logoutStore } = useAppStore.getState()
+            await logoutStore()
+            window.location.href = '/login'
+          } catch (error) {
+            console.error('退出登录失败:', error)
+            window.location.href = '/login'
+          }
         }}
       />
     </ProtectedRoute>

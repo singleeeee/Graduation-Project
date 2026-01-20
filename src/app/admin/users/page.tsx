@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useToast } from '@/hooks/use-toast'
+import { useAppStore } from '@/store'
 import { Search, Filter, Edit, Trash2, Eye, Download, Upload, Users, Crown, GraduationCap } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -650,7 +651,8 @@ export default function UserManagementPage() {
           role: 'system_admin'
         }}
         logout={() => {
-          localStorage.removeItem('token')
+          const { logout: logoutStore } = useAppStore.getState()
+          logoutStore()
           window.location.href = '/login'
         }}
       />

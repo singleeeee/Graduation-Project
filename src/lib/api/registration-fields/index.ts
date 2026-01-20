@@ -18,7 +18,7 @@ class RegistrationFieldsApi {
   private axios = axiosService
 
   /**
-   * 获取所有注册字段配置（需要超级管理员权限）
+   * 获取启用的注册字段配置（需要超级管理员权限）
    */
   async getRegistrationFields(): Promise<RegistrationField[]> {
     const response = await this.axios.get<RegistrationField[]>('/admin/registration-fields')

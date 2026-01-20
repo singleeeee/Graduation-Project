@@ -10,7 +10,7 @@ export interface RegistrationField {
   options?: {
     value: string
     label: string
-  }[]
+  }[] | string // 可以是对象数组或 JSON 字符串
   validationRules?: {
     minLength?: number
     maxLength?: number
@@ -34,7 +34,7 @@ export interface CreateRegistrationFieldRequest {
   options?: {
     value: string
     label: string
-  }[]
+  }[] | string // 可以是对象数组或 JSON 字符串
   validationRules?: {
     minLength?: number
     maxLength?: number
@@ -55,7 +55,7 @@ export interface UpdateRegistrationFieldRequest {
   options?: {
     value: string
     label: string
-  }[]
+  }[] | string // 可以是对象数组或 JSON 字符串
   validationRules?: {
     minLength?: number
     maxLength?: number

@@ -1,8 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef, useEffect, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useToast } from '@/hooks/use-toast'
+import { useAppStore } from '@/store'
 import { Plus, Edit, Trash2, ArrowUp, ArrowDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -64,6 +65,184 @@ interface RegistrationFieldsPageProps {
   logout: () => void
 }
 
+// 选项配置组件
+interface OptionsConfigFieldProps {
+  form: UseFormReturn<CreateRegistrationFieldRequest> | UseFormReturn<UpdateRegistrationFieldRequest>
+}
+
+interface Option {
+  value: string
+  label: string
+}
+
+function OptionsConfigField({ form }: OptionsConfigFieldProps) {
+  // 解析字段的 options（可能是 JSON 字符串或对象数组）
+  const parseFieldOptions = (rawOptions: any): Option[] => {
+    if (!rawOptions) return []
+    
+    try {
+      // 如果是字符串，尝试解析 JSON
+      if (typeof rawOptions === 'string') {
+        if (!rawOptions.trim()) return []
+        const parsed = JSON.parse(rawOptions)
+        // 处理嵌套的 options 结构
+        if (parsed.options && Array.isArray(parsed.options)) {
+          return parsed.options
+        }
+        // 如果直接是数组
+        if (Array.isArray(parsed)) {
+          return parsed
+        }
+      }
+      
+      // 如果已经是数组，直接使用
+      if (Array.isArray(rawOptions)) {
+        return rawOptions
+      }
+      
+      // 如果是个对象且有 options 属性
+      if (rawOptions.options && Array.isArray(rawOptions.options)) {
+        return rawOptions.options
+      }
+      
+      return []
+    } catch (error) {
+      console.warn('Failed to parse options:', rawOptions, error)
+      return []
+    }
+  }
+
+  // state 初始化，通过函数式初始化解析 form 中的 options
+  const [options, setOptionsLocal] = useState<Option[]>(() => parseFieldOptions(form.getValues('options')));
+
+  // 当组件挂载或 `form` 实例本身变化时（例如编辑模式切换了编辑项，导致表单重置），
+  // 重新从父表单的 `getValues` 中同步初始的 options 状态到组件内部。
+  // 这个 effect 主要用于回显父组件设置的默认值。
+  useEffect(() => {
+    const initialOptionsFromForm = parseFieldOptions(form.getValues('options'));
+    setOptionsLocal(initialOptionsFromForm);
+  }, [form]); // 依赖 [form] 确保在 form 实例变化时（如编辑不同项）重新同步
+
+  const addOption = () => {
+    const newOptions = [...options, { value: '', label: '' }]
+    setOptionsLocal(newOptions) // 使用 setOptionsLocal
+    updateFormOptions(newOptions)
+  }
+
+  const removeOption = (index: number) => {
+    const newOptions = options.filter((_, i) => i !== index)
+    setOptionsLocal(newOptions) // 使用 setOptionsLocal
+    updateFormOptions(newOptions)
+  }
+
+  const updateOption = (index: number, field: 'value' | 'label', newValue: string) => {
+    const newOptions = options.map((option, i) =>
+      i === index ? { ...option, [field]: newValue } : option
+    )
+    setOptionsLocal(newOptions) // 使用 setOptionsLocal
+    updateFormOptions(newOptions)
+  }
+
+  const updateFormOptions = (newOptions: Option[]) => {
+    // 确保写入表单的始终是紧凑的 JSON 字符串
+    form.setValue('options', JSON.stringify(newOptions))
+  }
+
+  const moveOption = (index: number, direction: 'up' | 'down') => {
+    const newIndex = direction === 'up' ? index - 1 : index + 1
+    if (newIndex < 0 || newIndex >= options.length) return
+
+    const newOptions = [...options]
+    ;[newOptions[index], newOptions[newIndex]] = [newOptions[newIndex], newOptions[index]]
+    setOptionsLocal(newOptions) // 使用 setOptionsLocal
+    updateFormOptions(newOptions)
+  }
+
+  return (
+    <FormField
+      control={form.control}
+      name="options"
+      render={({ field, formState: { errors } }) => (
+        <FormItem>
+          <FormLabel>选项配置</FormLabel>
+          <FormControl>
+            <div className="space-y-3">
+              {(Array.isArray(options) ? options : []).map((option, index) => (
+                <div key={index} className="flex items-center space-x-2 p-3 border rounded-lg">
+                  <div className="flex-1">
+                    <div className="flex space-x-2">
+                      <Input
+                        placeholder="值 (value)"
+                        value={option.value}
+                        onChange={(e) => updateOption(index, 'value', e.target.value)}
+                        className="flex-1"
+                      />
+                      <Input
+                        placeholder="标签 (label)"
+                        value={option.label}
+                        onChange={(e) => updateOption(index, 'label', e.target.value)}
+                        className="flex-1"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex space-x-1">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => moveOption(index, 'up')}
+                      disabled={index === 0}
+                    >
+                      ↑
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => moveOption(index, 'down')}
+                      disabled={index === options.length - 1}
+                    >
+                      ↓
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => removeOption(index)}
+                      className="text-red-500 hover:text-red-700"
+                    >
+                      删除
+                    </Button>
+                  </div>
+                </div>
+              ))}
+              
+              <Button
+                type="button"
+                variant="outline"
+                onClick={addOption}
+                className="w-full"
+              >
+                + 添加选项
+              </Button>
+              
+              {options.length > 0 && (
+                <div className="text-xs text-gray-500 mt-2">
+                  预览: {options.map(o => o.label).filter(Boolean).join(', ') || '请先填写选项'}
+                </div>
+              )}
+            </div>
+          </FormControl>
+          <FormDescription>
+            为下拉选择字段添加可选项，支持拖拽排序
+          </FormDescription>
+          <FormMessage />
+        </FormItem>
+      )}
+    />
+  )
+}
+
 // 表单验证模式
 const createFieldSchema = z.object({
   fieldName: z.string().min(1, '字段名称不能为空').max(50, '字段名称不能超过50个字符'),
@@ -103,6 +282,7 @@ function RegistrationFieldsPageContent({ user, logout }: RegistrationFieldsPageP
       isActive: true,
       placeholder: '',
       helpText: '',
+      options: '',
     }
   })
 
@@ -116,6 +296,7 @@ function RegistrationFieldsPageContent({ user, logout }: RegistrationFieldsPageP
       isActive: true,
       placeholder: '',
       helpText: '',
+      options: '',
     }
   })
 
@@ -125,9 +306,7 @@ function RegistrationFieldsPageContent({ user, logout }: RegistrationFieldsPageP
       const processedData = {
         ...data,
         fieldOrder: fields.length,
-        options: data.fieldType === 'select' && data.options 
-          ? JSON.parse((data.options as unknown) as string) 
-          : undefined
+        options: data.fieldType === 'select' ? data.options : undefined
       }
       return registrationFieldsApi.createRegistrationField(processedData)
     },
@@ -151,9 +330,7 @@ function RegistrationFieldsPageContent({ user, logout }: RegistrationFieldsPageP
     mutationFn: ({ id, data }: { id: string; data: UpdateRegistrationFieldRequest }) => {
       const processedData = {
         ...data,
-        options: data.fieldType === 'select' && data.options 
-          ? JSON.parse((data.options as unknown) as string) 
-          : data.options
+        options: data.fieldType === 'select' ? data.options : undefined
       }
       return registrationFieldsApi.updateRegistrationField(id, processedData)
     },
@@ -233,13 +410,13 @@ function RegistrationFieldsPageContent({ user, logout }: RegistrationFieldsPageP
       isActive: field.isActive,
       placeholder: field.placeholder || '',
       helpText: field.helpText || '',
-      options: field.options ? JSON.stringify(field.options, null, 2) as any : '',
+      options: field.options, // 直接传递原始值，让 OptionsConfigField 自己处理
     })
     setIsEditDialogOpen(true)
   }
 
   const handleMoveField = (index: number, direction: 'up' | 'down') => {
-    if ((direction === 'up' && index === 0) || 
+    if ((direction === 'up' && index === 0) ||
         (direction === 'down' && index === fields.length - 1)) {
       return
     }
@@ -247,13 +424,34 @@ function RegistrationFieldsPageContent({ user, logout }: RegistrationFieldsPageP
     const newFields = [...fields]
     const newIndex = direction === 'up' ? index - 1 : index + 1
     ;[newFields[index], newFields[newIndex]] = [newFields[newIndex], newFields[index]]
-    
-    const fieldsWithNewOrder = newFields.map((field, idx) => ({
-      id: field.id,
-      order: idx
-    }))
-    
-    updateOrderMutation.mutate(fieldsWithNewOrder)
+
+    // 遍历所有字段，并为每个字段分配新的 fieldOrder
+    newFields.forEach((field, idx) => {
+      // 简单的 UUID 校验 (非严格，主要检查长度和字符)
+      const uuidRegex = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+      if (!field.id || !uuidRegex.test(field.id)) {
+        console.error(`Invalid field ID encountered during reorder: ${field.id}. Skipping update for this field.`)
+        return // 跳过无效 ID 的字段
+      }
+
+      // 构建用于更新的数据对象
+      const updateData: UpdateRegistrationFieldRequest = {
+        fieldLabel: field.fieldLabel,
+        fieldType: field.fieldType,
+        isRequired: field.isRequired,
+        isActive: field.isActive,
+        placeholder: field.placeholder || '',
+        helpText: field.helpText || '',
+        fieldOrder: idx, // 更新 fieldOrder
+        // 确保传递给 API 的 options 是 JSON 字符串
+        options: field.fieldType === 'select' && field.options
+          ? (typeof field.options === 'string' ? field.options : JSON.stringify(field.options))
+          : undefined,
+      }
+
+      // 调用 updateFieldMutation 逐个更新每个字段的 fieldOrder
+      updateFieldMutation.mutate({ id: field.id, data: updateData })
+    })
   }
 
   const getFieldTypeColor = (type: string) => {
@@ -397,32 +595,9 @@ function RegistrationFieldsPageContent({ user, logout }: RegistrationFieldsPageP
                 />
 
                 {createForm.watch('fieldType') === 'select' && (
-                  <FormField
-                    control={createForm.control}
-                    name="options"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>选项配置</FormLabel>
-                        <FormControl>
-                          <Textarea 
-                            placeholder={`[
-  {"value": "option1", "label": "选项1"},
-  {"value": "option2", "label": "选项2"}
-]`}
-                            rows={4}
-                            value={(field.value as unknown) as string || ''}
-                            onChange={field.onChange}
-                            onBlur={field.onBlur}
-                            name={field.name}
-                            ref={field.ref}
-                          />
-                        </FormControl>
-                        <FormDescription>
-                          JSON格式的选项配置
-                        </FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
+                  <OptionsConfigField 
+                    key={`create-form-options-${createForm.watch('fieldType')}`}
+                    form={createForm} 
                   />
                 )}
 
@@ -577,29 +752,9 @@ function RegistrationFieldsPageContent({ user, logout }: RegistrationFieldsPageP
                 </div>
 
                 {editForm.watch('fieldType') === 'select' && (
-                  <FormField
-                    control={editForm.control}
-                    name="options"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>选项配置</FormLabel>
-                        <FormControl>
-                          <Textarea 
-                            placeholder={`[
-  {"value": "option1", "label": "选项1"},
-  {"value": "option2", "label": "选项2"}
-]`}
-                            rows={4}
-                            value={(field.value as unknown) as string || ''}
-                            onChange={field.onChange}
-                            onBlur={field.onBlur}
-                            name={field.name}
-                            ref={field.ref}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
+                  <OptionsConfigField 
+                    key={`edit-form-options-${editForm.watch('fieldType')}`}
+                    form={editForm} 
                   />
                 )}
 
@@ -642,7 +797,7 @@ function RegistrationFieldsPageContent({ user, logout }: RegistrationFieldsPageP
                         </div>
                         <FormControl>
                           <Switch
-                            checked={field.value}
+                            checked={field.value ?? false}
                             onCheckedChange={field.onChange}
                           />
                         </FormControl>
@@ -659,7 +814,7 @@ function RegistrationFieldsPageContent({ user, logout }: RegistrationFieldsPageP
                         </div>
                         <FormControl>
                           <Switch
-                            checked={field.value}
+                            checked={field.value ?? false}
                             onCheckedChange={field.onChange}
                           />
                         </FormControl>
@@ -853,7 +1008,8 @@ export default function RegistrationFieldsPage() {
           role: 'system_admin'
         }}
         logout={() => {
-          localStorage.removeItem('token')
+          const { logout: logoutStore } = useAppStore.getState()
+          logoutStore()
           window.location.href = '/login'
         }}
       />

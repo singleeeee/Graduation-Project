@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { useAppStore } from '@/store'
 
 // 权限类型定义
 export type Permission = 
@@ -19,6 +20,21 @@ export type Permission =
 
 // 角色权限映射
 export const ROLE_PERMISSIONS: Record<string, Permission[]> = {
+  super_admin: [  // 超级管理员角色
+    'user_manage',
+    'user_view',
+    'user_create',
+    'user_edit',
+    'user_delete',
+    'user_export',
+    'registration_field_manage',
+    'system_settings',
+    'recruitment_manage',
+    'recruitment_view',
+    'application_review',
+    'interview_manage',
+    'statistics_view',
+  ],
   system_admin: [
     'user_manage',
     'user_view',
@@ -48,7 +64,7 @@ export const ROLE_PERMISSIONS: Record<string, Permission[]> = {
 // 菜单项权限要求
 export const MENU_PERMISSIONS: Record<string, Permission[]> = {
   '/admin/users': ['user_view'],
-  '/admin/clubs': ['user_view'], // 社团管理使用用户查看权限或创建新的社团管理权限
+  '/admin/clubs': ['user_manage'], // 社团管理需要用户管理权限
   '/admin/registration-fields': ['registration_field_manage'],
   '/recruitment': ['recruitment_view'],
   '/screening': ['application_review'],
@@ -77,27 +93,35 @@ interface UsePermissionsReturn {
 }
 
 export function usePermissions(): UsePermissionsReturn {
+  const { user: authUser, isAuthenticated } = useAppStore()
   const [user, setUser] = useState<User | null>(null)
 
-  // 模拟获取当前用户信息，实际应该从认证系统获取
+  // 从认证系统获取当前用户信息
   useEffect(() => {
-    // 这里应该调用认证API获取用户信息
-    const mockUser: User = {
-      id: 'user-1',
-      name: '超级管理员',
-      email: 'admin@example.com',
-      role: 'system_admin',
-      permissions: ROLE_PERMISSIONS.system_admin
+    const checkAuth = () => {
+      return !!(authUser.id && authUser.email)
     }
-    setUser(mockUser)
-  }, [])
+    
+    if (checkAuth()) {
+      const userWithPermissions: User = {
+        id: authUser.id!,
+        name: authUser.name || '',
+        email: authUser.email!,
+        role: authUser.role || 'candidate',
+        permissions: ROLE_PERMISSIONS[authUser.role || 'candidate'] || []
+      }
+      setUser(userWithPermissions)
+    } else {
+      setUser(null)
+    }
+  }, [authUser])
 
   // 检查单个权限
   const hasPermission = (permission: Permission): boolean => {
     if (!user) return false
     
     // 超级管理员拥有所有权限
-    if (user.role === 'system_admin') return true
+    if (user.role === 'super_admin' || user.role === 'system_admin') return true
     
     // 检查用户具体权限
     const userPermissions = user.permissions || ROLE_PERMISSIONS[user.role] || []
@@ -166,7 +190,7 @@ export function useMenuItems(currentPath: string = '/'): MenuItem[] {
       icon: '🏢',
       href: '/admin/clubs',
       current: currentPath.startsWith('/admin/clubs'),
-      permission: 'user_view',
+      permission: 'user_manage',
     },
     {
       title: '字段配置',
