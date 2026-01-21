@@ -106,7 +106,14 @@ interface User {
   id: string | null
   name: string | null
   email: string | null
-  role: string | null
+  role: string | {
+    id: string
+    name: string
+    code: string
+    level: number
+    permissions: string[]
+  } | null
+  permissions?: string[]
 }
 
 interface DashboardLayoutProps {
@@ -193,38 +200,6 @@ export function DashboardLayout({ user, logout, children, menuItems, title, them
             ))}
           </SidebarContent>
 
-          {/* Footer with user info */}
-          <SidebarFooter>
-            <div className="space-y-4">
-              <div className="flex items-center space-x-3">
-                <div className={`w-10 h-10 ${currentTheme.bg} rounded-full flex items-center justify-center`}>
-                  <span className="text-white font-bold">
-                    {user.name ? user.name.charAt(0).toUpperCase() : '?'}
-                  </span>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-900 truncate">
-                    {user.name || (theme === 'admin' ? '管理员' : '候选人')}
-                  </p>
-                  <p className="text-xs text-gray-500 truncate">
-                    {user.email || (theme === 'admin' ? 'admin@example.com' : 'candidate@example.com')}
-                  </p>
-                </div>
-              </div>
-              
-              <Button
-                variant="outline"
-                size="sm"
-                className="w-full"
-                onClick={logout}
-              >
-                <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                </svg>
-                退出登录
-              </Button>
-            </div>
-          </SidebarFooter>
         </div>
       </SidebarContainer>
 
@@ -254,6 +229,28 @@ export function DashboardLayout({ user, logout, children, menuItems, title, them
                   {user.name ? user.name.charAt(0).toUpperCase() : (theme === 'admin' ? 'A' : 'C')}
                 </span>
               </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={logout}
+                className="hidden sm:flex items-center space-x-2"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                </svg>
+                <span>退出</span>
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={logout}
+                className="sm:hidden"
+                title="退出登录"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                </svg>
+              </Button>
             </div>
           </div>
         </header>

@@ -42,6 +42,7 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form'
+import type { UseFormReturn } from 'react-hook-form'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { useForm } from 'react-hook-form'
@@ -113,13 +114,20 @@ function OptionsConfigField({ form }: OptionsConfigFieldProps) {
   }
 
   // state 初始化，通过函数式初始化解析 form 中的 options
-  const [options, setOptionsLocal] = useState<Option[]>(() => parseFieldOptions(form.getValues('options')));
+  const [options, setOptionsLocal] = useState<Option[]>(() => {
+    try {
+      const fieldOptions = form.getValues('options' as any)
+      return parseFieldOptions(fieldOptions)
+    } catch {
+      return []
+    }
+  });
 
   // 当组件挂载或 `form` 实例本身变化时（例如编辑模式切换了编辑项，导致表单重置），
   // 重新从父表单的 `getValues` 中同步初始的 options 状态到组件内部。
   // 这个 effect 主要用于回显父组件设置的默认值。
   useEffect(() => {
-    const initialOptionsFromForm = parseFieldOptions(form.getValues('options'));
+    const initialOptionsFromForm = parseFieldOptions(form.getValues('options' as any));
     setOptionsLocal(initialOptionsFromForm);
   }, [form]); // 依赖 [form] 确保在 form 实例变化时（如编辑不同项）重新同步
 
@@ -145,7 +153,10 @@ function OptionsConfigField({ form }: OptionsConfigFieldProps) {
 
   const updateFormOptions = (newOptions: Option[]) => {
     // 确保写入表单的始终是紧凑的 JSON 字符串
-    form.setValue('options', JSON.stringify(newOptions))
+    const optionsString = JSON.stringify(newOptions)
+    if ('options' in form.getValues()) {
+      ;(form as any).setValue('options', optionsString)
+    }
   }
 
   const moveOption = (index: number, direction: 'up' | 'down') => {
@@ -160,7 +171,7 @@ function OptionsConfigField({ form }: OptionsConfigFieldProps) {
 
   return (
     <FormField
-      control={form.control}
+      control={(form as any).control}
       name="options"
       render={({ field, formState: { errors } }) => (
         <FormItem>
@@ -265,8 +276,11 @@ function RegistrationFieldsPageContent({ user, logout }: RegistrationFieldsPageP
 
   // 获取注册字段列表
   const { data: fields = [], isLoading, error } = useQuery({
-    queryKey: ['registrationFields'],
-    queryFn: () => registrationFieldsApi.getRegistrationFields(),
+    queryKey: ['registrationFields', 'admin'],
+    queryFn: async () => {
+      const result = await registrationFieldsApi.getRegistrationFields()
+      return result || []
+    },
     enabled: true,
   })
 
@@ -312,7 +326,8 @@ function RegistrationFieldsPageContent({ user, logout }: RegistrationFieldsPageP
     },
     onSuccess: () => {
       toast({ title: '成功', description: '注册字段创建成功' })
-      queryClient.invalidateQueries({ queryKey: ['registrationFields'] })
+      queryClient.invalidateQueries({ queryKey: ['registrationFields', 'admin'] })
+      queryClient.invalidateQueries({ queryKey: ['registrationFields', 'active'] })
       setIsCreateDialogOpen(false)
       createForm.reset()
     },
@@ -336,7 +351,8 @@ function RegistrationFieldsPageContent({ user, logout }: RegistrationFieldsPageP
     },
     onSuccess: () => {
       toast({ title: '成功', description: '注册字段更新成功' })
-      queryClient.invalidateQueries({ queryKey: ['registrationFields'] })
+      queryClient.invalidateQueries({ queryKey: ['registrationFields', 'admin'] })
+      queryClient.invalidateQueries({ queryKey: ['registrationFields', 'active'] })
       setIsEditDialogOpen(false)
       setSelectedField(null)
       editForm.reset()
@@ -355,7 +371,8 @@ function RegistrationFieldsPageContent({ user, logout }: RegistrationFieldsPageP
     mutationFn: (id: string) => registrationFieldsApi.deleteRegistrationField(id),
     onSuccess: () => {
       toast({ title: '成功', description: '注册字段删除成功' })
-      queryClient.invalidateQueries({ queryKey: ['registrationFields'] })
+      queryClient.invalidateQueries({ queryKey: ['registrationFields', 'admin'] })
+      queryClient.invalidateQueries({ queryKey: ['registrationFields', 'active'] })
       setIsDeleteDialogOpen(false)
       setSelectedField(null)
     },
@@ -374,7 +391,8 @@ function RegistrationFieldsPageContent({ user, logout }: RegistrationFieldsPageP
       registrationFieldsApi.updateFieldOrder(fields),
     onSuccess: () => {
       toast({ title: '成功', description: '字段顺序更新成功' })
-      queryClient.invalidateQueries({ queryKey: ['registrationFields'] })
+      queryClient.invalidateQueries({ queryKey: ['registrationFields', 'admin'] })
+      queryClient.invalidateQueries({ queryKey: ['registrationFields', 'active'] })
     },
     onError: (error: any) => {
       toast({ 
@@ -506,7 +524,7 @@ function RegistrationFieldsPageContent({ user, logout }: RegistrationFieldsPageP
   }
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-6">
+    <div className="max-w-7xl mx-auto space-y-6">
       {/* 页面标题 */}
       <div className="flex justify-between items-center">
         <div>

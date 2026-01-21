@@ -1,12 +1,13 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useToast } from '@/hooks/use-toast'
 import { useAppStore } from '@/store'
-import { Search, Filter, Edit, Trash2, Eye, Download, Upload, Users, Crown, GraduationCap } from 'lucide-react'
+import { Search, Filter, Edit, Trash2, Eye, Users, Crown, GraduationCap } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import {
   Select,
@@ -49,7 +50,14 @@ interface UserManagementPageProps {
     id: string | null
     name: string | null
     email: string | null
-    role: string | null
+    role: string | {
+      id: string
+      name: string
+      code: string
+      level: number
+      permissions: string[]
+    } | null
+    permissions?: string[]
   }
   logout: () => void
 }
@@ -66,6 +74,12 @@ function UserManagementPageContent({ user, logout }: UserManagementPageProps) {
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
+  const [editFormData, setEditFormData] = useState({
+    name: '',
+    email: '',
+    status: 'active' as 'active' | 'inactive' | 'suspended',
+    statusReason: ''
+  })
   
   const queryClient = useQueryClient()
   const { toast } = useToast()
@@ -104,6 +118,24 @@ function UserManagementPageContent({ user, logout }: UserManagementPageProps) {
     },
   })
 
+  // 编辑用户
+  const editUserMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: any }) => usersApi.updateUser(id, data),
+    onSuccess: () => {
+      toast({ title: '成功', description: '用户信息更新成功' })
+      queryClient.invalidateQueries({ queryKey: ['users'] })
+      setIsEditDialogOpen(false)
+      setSelectedUser(null)
+    },
+    onError: (error: any) => {
+      toast({ 
+        title: '错误', 
+        description: error?.response?.data?.message || '更新用户信息失败',
+        variant: 'destructive'
+      })
+    },
+  })
+
   // 删除用户
   const deleteUserMutation = useMutation({
     mutationFn: (id: string) => usersApi.deleteUser(id),
@@ -122,30 +154,6 @@ function UserManagementPageContent({ user, logout }: UserManagementPageProps) {
     },
   })
 
-  // 导出用户数据
-  const exportMutation = useMutation({
-    mutationFn: async () => {
-      const blob = await usersApi.exportUsers()
-      const url = window.URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `users_export_${new Date().toISOString().split('T')[0]}.xlsx`
-      document.body.appendChild(a)
-      a.click()
-      window.URL.revokeObjectURL(url)
-      document.body.removeChild(a)
-    },
-    onSuccess: () => {
-      toast({ title: '成功', description: '用户数据导出成功' })
-    },
-    onError: (error: any) => {
-      toast({ 
-        title: '错误', 
-        description: error?.response?.data?.message || '导出失败',
-        variant: 'destructive'
-      })
-    },
-  })
 
   const handleFilterChange = (key: keyof UserFilters, value: string) => {
     setFilters(prev => ({ ...prev, [key]: value }))
@@ -159,6 +167,58 @@ function UserManagementPageContent({ user, logout }: UserManagementPageProps) {
   const handleDeleteUser = () => {
     if (selectedUser) {
       deleteUserMutation.mutate(selectedUser.id)
+    }
+  }
+
+  const handleOpenEditDialog = (user: UserProfile) => {
+    setSelectedUser(user)
+    setEditFormData({
+      name: user.name || '',
+      email: user.email,
+      status: user.status,
+      statusReason: ''
+    })
+    setIsEditDialogOpen(true)
+  }
+
+  const handleEditSubmit = () => {
+    if (selectedUser) {
+      // Extract user role code if it's an object
+      const userRoleCode = typeof selectedUser.role === 'object' && selectedUser.role?.code 
+        ? selectedUser.role.code 
+        : selectedUser.role
+
+      // Build request data according to the new UpdateUserRequest interface
+      const requestData: any = {
+        name: editFormData.name,
+        status: editFormData.status,
+        statusReason: editFormData.statusReason || undefined
+      }
+
+      // Only include email if it has changed and validate it
+      if (editFormData.email && editFormData.email !== selectedUser.email) {
+        requestData.email = editFormData.email
+      }
+
+      // Include roleCode if user has a role but not for system_admin as per API rules
+      if (userRoleCode && userRoleCode !== 'system_admin') {
+        requestData.roleCode = userRoleCode
+      }
+
+      // Include profileFields from selectedUser if available
+      if (selectedUser.profileFields && Object.keys(selectedUser.profileFields).length > 0) {
+        requestData.profileFields = selectedUser.profileFields
+      }
+
+      // Include avatar if user has one
+      if (selectedUser.avatar) {
+        requestData.avatar = selectedUser.avatar
+      }
+
+      editUserMutation.mutate({
+        id: selectedUser.id,
+        data: requestData
+      })
     }
   }
 
@@ -224,26 +284,12 @@ function UserManagementPageContent({ user, logout }: UserManagementPageProps) {
   }
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-6">
+    <div className="mx-auto space-y-6">
       {/* 页面标题 */}
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">用户管理</h1>
           <p className="text-gray-600 mt-1">管理系统中的所有用户账号</p>
-        </div>
-        <div className="flex space-x-3">
-          <Button 
-            variant="outline" 
-            onClick={() => exportMutation.mutate()}
-            disabled={exportMutation.isPending}
-          >
-            <Download className="h-4 w-4 mr-2" />
-            导出数据
-          </Button>
-          <Button variant="outline">
-            <Upload className="h-4 w-4 mr-2" />
-            批量导入
-          </Button>
         </div>
       </div>
 
@@ -269,7 +315,7 @@ function UserManagementPageContent({ user, logout }: UserManagementPageProps) {
               <div>
                 <p className="text-sm font-medium text-gray-600">激活用户</p>
                 <p className="text-2xl font-bold">
-                  {usersData?.users?.filter(u => u.role !== 'admin').length || 0}
+                  {usersData?.users?.filter(u => u.status === 'active').length || 0}
                 </p>
               </div>
               <div className="p-2 bg-green-100 rounded-lg">
@@ -285,9 +331,10 @@ function UserManagementPageContent({ user, logout }: UserManagementPageProps) {
               <div>
                 <p className="text-sm font-medium text-gray-600">管理员</p>
                 <p className="text-2xl font-bold">
-                  {usersData?.users?.filter(u => 
-                    u.role === 'admin'
-                  ).length || 0}
+                  {usersData?.users?.filter(u => {
+                    const roleCode = typeof u.role === 'object' && u.role?.code ? u.role.code : u.role
+                    return roleCode === 'admin' || roleCode === 'system_admin' || roleCode === 'super_admin'
+                  }).length || 0}
                 </p>
               </div>
               <div className="p-2 bg-purple-100 rounded-lg">
@@ -302,9 +349,12 @@ function UserManagementPageContent({ user, logout }: UserManagementPageProps) {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600">候选人</p>
-                <p className="text-2xl font-bold">
-                  {usersData?.users?.filter(u => u.role === 'candidate').length || 0}
-                </p>
+                  <p className="text-2xl font-bold">
+                    {usersData?.users?.filter(u => {
+                      const roleCode = typeof u.role === 'object' && u.role?.code ? u.role.code : u.role
+                      return roleCode === 'candidate'
+                    }).length || 0}
+                  </p>
               </div>
               <div className="p-2 bg-yellow-100 rounded-lg">
                 <GraduationCap className="h-5 w-5 text-yellow-600" />
@@ -391,14 +441,14 @@ function UserManagementPageContent({ user, logout }: UserManagementPageProps) {
                       加载中...
                     </TableCell>
                   </TableRow>
-                ) : usersData?.users?.length === 0 ? (
+                ) : usersData && usersData?.users?.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={5} className="text-center py-8 text-gray-500">
                       暂无用户数据
                     </TableCell>
                   </TableRow>
                 ) : (
-                  usersData?.users?.map((user) => (
+                  (usersData?.users ?? []).map((user) => (
                     <TableRow key={user.id}>
                       <TableCell>
                         <div className="flex items-center space-x-3">
@@ -445,10 +495,7 @@ function UserManagementPageContent({ user, logout }: UserManagementPageProps) {
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => {
-                              setSelectedUser(user)
-                              setIsEditDialogOpen(true)
-                            }}
+                            onClick={() => handleOpenEditDialog(user)}
                           >
                             <Edit className="h-4 w-4" />
                           </Button>
@@ -607,6 +654,77 @@ function UserManagementPageContent({ user, logout }: UserManagementPageProps) {
         </DialogContent>
       </Dialog>
 
+      {/* 编辑用户对话框 */}
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>编辑用户</DialogTitle>
+            <DialogDescription>
+              修改用户的基本信息和状态
+            </DialogDescription>
+          </DialogHeader>
+            <div className="space-y-6">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">用户名</label>
+                  <Input
+                    value={editFormData.name}
+                    onChange={(e) => setEditFormData(prev => ({ ...prev, name: e.target.value }))}
+                    placeholder="请输入用户名"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">邮箱</label>
+                  <Input
+                    type="email"
+                    value={editFormData.email}
+                    onChange={(e) => setEditFormData(prev => ({ ...prev, email: e.target.value }))}
+                    placeholder="请输入邮箱"
+                  />
+                </div>
+                <div className="col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">状态</label>
+                  <Select
+                    value={editFormData.status}
+                    onValueChange={(value: 'active' | 'inactive' | 'suspended') => 
+                      setEditFormData(prev => ({ ...prev, status: value }))
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="选择状态" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="active">激活</SelectItem>
+                      <SelectItem value="inactive">未激活</SelectItem>
+                      <SelectItem value="suspended">已暂停</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">状态修改原因</label>
+                  <Textarea
+                    value={editFormData.statusReason}
+                    onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setEditFormData(prev => ({ ...prev, statusReason: e.target.value }))}
+                    placeholder="请输入状态修改的原因（可选）"
+                    rows={3}
+                  />
+                </div>
+              </div>
+            </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
+              取消
+            </Button>
+            <Button 
+              onClick={handleEditSubmit}
+              disabled={editUserMutation.isPending}
+            >
+              {editUserMutation.isPending ? '保存中...' : '保存更改'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* 删除确认对话框 */}
       <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
         <DialogContent>
@@ -643,17 +761,17 @@ function UserManagementPageContent({ user, logout }: UserManagementPageProps) {
 export default function UserManagementPage() {
   return (
     <ProtectedRoute permission="user_view">
-      <UserManagementPageContent 
-        user={{
-          id: 'admin-1',
-          name: '超级管理员',
-          email: 'admin@example.com',
-          role: 'system_admin'
-        }}
-        logout={() => {
-          const { logout: logoutStore } = useAppStore.getState()
-          logoutStore()
-          window.location.href = '/login'
+      <UserManagementPageContent
+        user={{ id: 'admin-1', name: '超级管理员', email: 'admin@example.com', role: 'system_admin' }}
+        logout={async () => {
+          try {
+            const { logout: logoutStore } = useAppStore.getState()
+            await logoutStore()
+            window.location.href = '/login'
+          } catch (error) {
+            console.error('退出登录失败:', error)
+            window.location.href = '/login'
+          }
         }}
       />
     </ProtectedRoute>

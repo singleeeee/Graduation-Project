@@ -22,3 +22,17 @@ export const registrationSchema = z.object({
 
 export type LoginFormData = z.infer<typeof loginSchema>
 export type RegistrationFormData = z.infer<typeof registrationSchema>
+
+// Profile form schemas
+export const profileBasicInfoSchema = z.object({
+  name: z.string().min(2, '姓名至少需要2个字符').max(50, '姓名不能超过50个字符'),
+  phone: z.string().min(11, '请输入有效的手机号码').max(20, '手机号码格式不正确').optional(),
+})
+
+export const profileFieldSchema = z.record(
+  z.string().min(1, '字段名称不能为空'),
+  z.string().optional()
+)
+
+export type ProfileBasicInfoFormData = z.infer<typeof profileBasicInfoSchema>
+export type ProfileFieldFormData = z.infer<typeof profileFieldSchema>

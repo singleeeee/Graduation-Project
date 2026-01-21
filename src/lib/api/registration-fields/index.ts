@@ -22,7 +22,7 @@ class RegistrationFieldsApi {
    */
   async getRegistrationFields(): Promise<RegistrationField[]> {
     const response = await this.axios.get<RegistrationField[]>('/admin/registration-fields')
-    return response.data
+    return response.data || []
   }
 
   /**
@@ -62,7 +62,7 @@ class RegistrationFieldsApi {
    */
   async getActiveFields(): Promise<RegistrationField[]> {
     const response = await this.axios.get<RegistrationField[]>('/registration-fields/active')
-    return response.data
+    return response.data || []
   }
 }
 

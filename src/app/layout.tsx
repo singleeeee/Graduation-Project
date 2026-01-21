@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import './globals.css'
 import { QueryProvider } from '@/lib/query-client'
+import { AuthGuard } from '@/components/auth/AuthGuard'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -19,7 +20,9 @@ export default function RootLayout({
     <html lang="zh-CN">
       <body className={inter.className}>
         <QueryProvider>
-          {children}
+          <AuthGuard>
+            {children}
+          </AuthGuard>
         </QueryProvider>
       </body>
     </html>

@@ -24,10 +24,10 @@ class AuthApi {
    * 用户登录
    */
   async login(data: LoginRequest): Promise<LoginResponse> {
-    const response = await this.axios.post<LoginResponse>('/auth/login', data)
+    const response = await this.axios.post<any>('/auth/login', data)
     
     // 自动保存令牌到本地存储
-    if (response.data && response.data.accessToken && response.data.refreshToken) {
+    if (response && response.data && response.data.accessToken && response.data.refreshToken) {
       this.axios.setTokens(response.data.accessToken, response.data.refreshToken)
     }
     
@@ -38,7 +38,13 @@ class AuthApi {
    * 用户注册
    */
   async register(data: RegisterRequest): Promise<LoginResponse> {
-    const response = await this.axios.post<LoginResponse>('/auth/register', data)
+    const response = await this.axios.post<any>('/auth/register', data)
+    
+    // 自动保存令牌到本地存储
+    if (response && response.data && response.data.accessToken && response.data.refreshToken) {
+      this.axios.setTokens(response.data.accessToken, response.data.refreshToken)
+    }
+    
     return response.data
   }
 

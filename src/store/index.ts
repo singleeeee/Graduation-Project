@@ -6,7 +6,14 @@ interface AppState {
     id: string | null
     name: string | null
     email: string | null
-    role: string | null
+    role: string | {
+      id: string
+      name: string
+      code: string
+      level: number
+      permissions: string[]
+    } | null
+    permissions: string[]
   }
   isLoading: boolean
   setUser: (user: Partial<AppState['user']>) => void
@@ -25,9 +32,17 @@ export const useAppStore = create<AppState>((set, get) => ({
     name: null,
     email: null,
     role: null,
+    permissions: []
   },
   isLoading: false,
-  setUser: (user) => set((state) => ({ user: { ...state.user, ...user } })),
+    setUser: (user) => set((state) => ({ 
+      user: { 
+        ...state.user, 
+        ...user,
+        // Ensure permissions is always an array
+        permissions: user.permissions || state.user.permissions || []
+      } 
+    })),
   setLoading: (loading) => set({ isLoading: loading }),
   logout: async () => {
     try {
@@ -45,6 +60,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         name: null,
         email: null,
         role: null,
+        permissions: []
       }
     })
   },

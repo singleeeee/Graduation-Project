@@ -10,7 +10,14 @@ interface User {
   id: string | null
   name: string | null
   email: string | null
-  role: string | null
+  role: string | {
+    id: string
+    name: string
+    code: string
+    level: number
+    permissions: string[]
+  } | null
+  permissions?: string[]
 }
 
 interface CandidateDashboardProps {

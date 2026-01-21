@@ -2,7 +2,10 @@
 export interface UserRole {
   id: string
   name: string
-  code: 'admin' | 'candidate' | 'interviewer'
+  code: string
+  description?: string
+  level: number
+  permissions?: string[]
 }
 
 // 用户状态
@@ -14,8 +17,10 @@ export interface UserProfile {
   name: string
   email: string
   status: UserStatus
+  emailVerified: boolean
   avatar?: string
   role: UserRole | string // 后端可能返回对象或字符串角色
+  clubId?: string
   // 常用动态字段
   studentId?: string
   college?: string
@@ -28,6 +33,26 @@ export interface UserProfile {
   profileFields?: { [key: string]: string }
   createdAt: string
   updatedAt: string
+}
+
+// 创建用户请求
+export interface CreateUserRequest {
+  email: string
+  password?: string
+  name?: string
+  roleId: string
+  clubId?: string
+  status?: UserStatus
+}
+
+// 更新用户基本信息请求（新聚合接口）
+export interface UpdateUserRequest {
+  roleCode?: string
+  status?: UserStatus
+  name?: string
+  avatar?: string
+  profileFields?: { [key: string]: string }
+  statusReason?: string
 }
 
 // 更新用户基本资料请求
@@ -85,7 +110,10 @@ export interface ChangePasswordRequest {
 export interface UserListParams {
   page?: number
   limit?: number
-  role?: 'admin' | 'candidate' | 'interviewer'
+  role?: string
+  roleLevel?: number
+  status?: UserStatus
+  clubId?: string
   search?: string
   sortBy?: string
   sortOrder?: 'asc' | 'desc'

@@ -26,7 +26,14 @@ export interface LoginResponse {
     id: string
     name: string
     email: string
-    role: 'admin' | 'candidate' | 'interviewer'
+    role: {
+      id: string
+      name: string
+      code: string
+      level: number
+      permissions: string[]
+    }
+    permissions: string[]
     major?: string
     grade?: string
   }
@@ -46,7 +53,14 @@ export interface UserProfileBasic {
   studentId?: string
   major?: string
   grade?: string
-  role: 'admin' | 'candidate' | 'interviewer'
+  role: {
+    id: string
+    name: string
+    code: string
+    level: number
+    permissions?: string[]
+  }
+  permissions: string[]
   avatar?: string
   createdAt: string
   updatedAt: string

@@ -309,8 +309,11 @@ export function DynamicRegistrationForm({ onSubmit, isSubmitting = false }: Dyna
 
   // 获取动态字段配置
   const { data: dynamicFields = [], isLoading, error } = useQuery({
-    queryKey: ['registrationFields'],
-    queryFn: () => registrationFieldsApi.getActiveFields(),
+    queryKey: ['registrationFields', 'active'],
+    queryFn: async () => {
+      const result = await registrationFieldsApi.getActiveFields()
+      return result || []
+    },
   })
 
   // 处理错误
