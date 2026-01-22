@@ -9,7 +9,10 @@ import type {
   UserListParams,
   UserListResponse,
   CreateUserRequest,
-  UpdateUserRequest
+  UpdateUserRequest,
+  CreateClubAdminRequest,
+  CreateClubAdminResponse,
+  UpdateUserResponse
 } from './types'
 
 // 导出类型以供其他模块使用
@@ -26,7 +29,10 @@ export type {
   UserListParams,
   UserListResponse,
   CreateUserRequest,
-  UpdateUserRequest
+  UpdateUserRequest,
+  CreateClubAdminRequest,
+  CreateClubAdminResponse,
+  UpdateUserResponse
 } from './types'
 
 // 用户 API 类
@@ -93,16 +99,24 @@ class UsersApi {
    * 管理员创建用户
    */
   async createUser(data: CreateUserRequest): Promise<UserProfile> {
-    const response = await this.axios.post<ApiResponse<UserProfile>>('/api/v1/users', data)
+    const response = await this.axios.post<ApiResponse<UserProfile>>('/users', data)
     return this.handleResponse<UserProfile>(response)
+  }
+
+  /**
+   * 创建社团管理员账号
+   */
+  async createClubAdmin(data: CreateClubAdminRequest): Promise<CreateClubAdminResponse> {
+    const response = await this.axios.post<ApiResponse<CreateClubAdminResponse>>('/admin/users/club-admin', data)
+    return this.handleResponse<CreateClubAdminResponse>(response)
   }
 
   /**
    * 管理员更新用户信息（使用新聚合接口）
    */
-  async updateUser(userId: string, data: UpdateUserRequest): Promise<UserProfile> {
-    const response = await this.axios.put<ApiResponse<UserProfile>>(`/api/v1/admin/users/${userId}`, data)
-    return this.handleResponse<UserProfile>(response)
+  async updateUser(userId: string, data: UpdateUserRequest): Promise<UpdateUserResponse> {
+    const response = await this.axios.put<ApiResponse<UpdateUserResponse>>(`/admin/users/${userId}`, data)
+    return this.handleResponse<UpdateUserResponse>(response)
   }
 
   /**

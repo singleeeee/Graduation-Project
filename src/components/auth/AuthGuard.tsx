@@ -25,33 +25,55 @@ export function AuthGuard({ children, requireAuth, requireGuest }: AuthGuardProp
   const [isLoading, setIsLoading] = useState(true)
   const [isInitialized, setIsInitialized] = useState(false)
   
+  // 首先检查是否已有用户信息（快速路径）
+  const { user: currentUser } = useAppStore.getState()
+  const hasUserInfo = currentUser && currentUser.id && currentUser.email
+  
   useEffect(() => {
     let isMounted = true
+    let timeoutId: NodeJS.Timeout
     
     const initAuth = async () => {
       try {
-        if (!isInitialized) {
-          // 只在未初始化时执行认证检查
-          const authResult = await initializeAuth()
+        // 如果已经有用户信息，跳过后端API调用
+        if (hasUserInfo) {
+          console.log('AuthGuard: 已有用户信息，跳过认证初始化')
           if (isMounted) {
             setIsInitialized(true)
-            console.log('认证初始化完成:', authResult)
+            setIsLoading(false)
           }
+          return
+        }
+        
+        // 设置超时保护，避免无限等待
+        timeoutId = setTimeout(() => {
+          if (isMounted) {
+            console.warn('认证初始化超时，跳过认证检查')
+            setIsInitialized(true)
+            setIsLoading(false)
+          }
+        }, 3000) // 3秒超时
+        
+        // 只在必要时执行认证检查
+        const authResult = await initializeAuth()
+        if (isMounted) {
+          clearTimeout(timeoutId)
+          setIsInitialized(true)
+          console.log('认证初始化完成:', authResult)
+          setIsLoading(false)
         }
       } catch (error) {
         console.error('认证初始化失败:', error)
         if (isMounted) {
+          clearTimeout(timeoutId)
           setIsInitialized(true)
-        }
-      } finally {
-        if (isMounted) {
           setIsLoading(false)
         }
       }
     }
     
-    // 在客户端执行认证初始化
-    if (typeof window !== 'undefined') {
+    // 在客户端执行认证初始化，但只在首次加载时执行
+    if (typeof window !== 'undefined' && !isInitialized) {
       initAuth()
     } else {
       setIsLoading(false)
@@ -60,8 +82,21 @@ export function AuthGuard({ children, requireAuth, requireGuest }: AuthGuardProp
     
     return () => {
       isMounted = false
+      if (timeoutId) {
+        clearTimeout(timeoutId)
+      }
     }
-  }, [isInitialized])
+  }, [hasUserInfo, isInitialized])
+
+  // 实时计算认证状态
+  const authenticated = isAuthenticated()
+
+  // 如果需要未登录但已登录，重定向到首页
+  useEffect(() => {
+    if (requireGuest && authenticated) {
+      router.push('/')
+    }
+  }, [requireGuest, authenticated, router])
   
   // 如果正在加载，显示加载状态
   if (isLoading) {
@@ -75,17 +110,13 @@ export function AuthGuard({ children, requireAuth, requireGuest }: AuthGuardProp
     )
   }
   
-  const authenticated = isAuthenticated()
-  
   // 如果需要认证但未登录，重定向到登录页
   if (requireAuth && !authenticated) {
     router.push('/login')
     return null
   }
-  
-  // 如果需要未登录但已登录，重定向到首页
+
   if (requireGuest && authenticated) {
-    router.push('/')
     return null
   }
   

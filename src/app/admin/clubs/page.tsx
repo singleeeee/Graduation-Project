@@ -95,6 +95,9 @@ function ClubManagementPageContent({ user, logout }: { user: any; logout: () => 
       return clubsApi.getClubs(queryParams)
     },
     enabled: true,
+    staleTime: 0, // 禁用缓存，每次切换都重新获取数据
+    refetchOnWindowFocus: true, // 窗口获得焦点时重新获取
+    refetchOnMount: true, // 组件挂载时重新获取
   })
 
   // 创建社团

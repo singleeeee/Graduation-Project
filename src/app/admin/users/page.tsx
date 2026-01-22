@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useToast } from '@/hooks/use-toast'
 import { useAppStore } from '@/store'
-import { Search, Filter, Edit, Trash2, Eye, Users, Crown, GraduationCap } from 'lucide-react'
+import { Search, Filter, Edit, Trash2, Eye, Users, Crown, GraduationCap, UserPlus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -36,8 +36,9 @@ import {
 } from '@/components/ui/dialog'
 import { Badge } from '@/components/ui/badge'
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute'
-import { usersApi } from '@/lib/api'
-import type { UserProfile, UserListParams } from '@/lib/api/users'
+import { usersApi, clubsApi, rolesApi } from '@/lib/api'
+import type { UserProfile, UserListParams, CreateClubAdminRequest } from '@/lib/api/users'
+import type { Club, ClubListResponse } from '@/lib/api/clubs'
 
 interface UserFilters {
   role: string
@@ -74,11 +75,21 @@ function UserManagementPageContent({ user, logout }: UserManagementPageProps) {
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
+  const [isCreateClubAdminDialogOpen, setIsCreateClubAdminDialogOpen] = useState(false)
   const [editFormData, setEditFormData] = useState({
     name: '',
     email: '',
     status: 'active' as 'active' | 'inactive' | 'suspended',
-    statusReason: ''
+    statusReason: '',
+    roleCode: '',
+    avatar: '',
+    profileFields: {} as { [key: string]: string }
+  })
+  const [createClubAdminForm, setCreateClubAdminForm] = useState({
+    email: '',
+    password: '',
+    name: '',
+    clubId: ''
   })
   
   const queryClient = useQueryClient()
@@ -95,10 +106,30 @@ function UserManagementPageContent({ user, logout }: UserManagementPageProps) {
   }
 
   // 获取用户列表
-  const { data: usersData, isLoading, error } = useQuery({
+  const { data: usersData, isLoading: isUsersLoading, error: usersError } = useQuery({
     queryKey: ['users', queryParams],
     queryFn: () => usersApi.getUsers(queryParams),
     enabled: true,
+    staleTime: 0, // 禁用缓存，每次切换都重新获取数据
+  })
+
+  // 获取社团列表
+  const { data: clubsData, isLoading: isClubsLoading, error: clubsError } = useQuery({
+    queryKey: ['clubs'],
+    queryFn: () => clubsApi.getClubs({ limit: 100 }),
+    enabled: isCreateClubAdminDialogOpen,
+  })
+
+  // 获取角色列表
+  const { data: rolesData, isLoading: isRolesLoading, error: rolesError } = useQuery({
+    queryKey: ['roles'],
+    queryFn: async () => {
+      const response = await rolesApi.getRoles({ limit: 50 })
+      // rolesApi.getRoles 现在直接返回 Role[] 数组
+      return response
+    },
+    enabled: isEditDialogOpen, // 只在编辑对话框打开时加载角色数据
+    staleTime: 5 * 60 * 1000, // 5分钟内不重新获取
   })
 
   // 更新用户状态
@@ -131,6 +162,29 @@ function UserManagementPageContent({ user, logout }: UserManagementPageProps) {
       toast({ 
         title: '错误', 
         description: error?.response?.data?.message || '更新用户信息失败',
+        variant: 'destructive'
+      })
+    },
+  })
+
+  // 创建社团管理员账号
+  const createClubAdminMutation = useMutation({
+    mutationFn: (data: CreateClubAdminRequest) => usersApi.createClubAdmin(data),
+    onSuccess: () => {
+      toast({ title: '成功', description: '社团管理员账号创建成功' })
+      queryClient.invalidateQueries({ queryKey: ['users'] })
+      setIsCreateClubAdminDialogOpen(false)
+      setCreateClubAdminForm({
+        email: '',
+        password: '',
+        name: '',
+        clubId: ''
+      })
+    },
+    onError: (error: any) => {
+      toast({ 
+        title: '错误', 
+        description: error?.response?.data?.message || '创建社团管理员账号失败',
         variant: 'destructive'
       })
     },
@@ -176,18 +230,16 @@ function UserManagementPageContent({ user, logout }: UserManagementPageProps) {
       name: user.name || '',
       email: user.email,
       status: user.status,
-      statusReason: ''
+      statusReason: '',
+      roleCode: typeof user.role === 'object' && user.role?.code ? user.role.code : (user.role as string) || '',
+      avatar: user.avatar || '',
+      profileFields: user.profileFields || {}
     })
     setIsEditDialogOpen(true)
   }
 
   const handleEditSubmit = () => {
     if (selectedUser) {
-      // Extract user role code if it's an object
-      const userRoleCode = typeof selectedUser.role === 'object' && selectedUser.role?.code 
-        ? selectedUser.role.code 
-        : selectedUser.role
-
       // Build request data according to the new UpdateUserRequest interface
       const requestData: any = {
         name: editFormData.name,
@@ -200,19 +252,29 @@ function UserManagementPageContent({ user, logout }: UserManagementPageProps) {
         requestData.email = editFormData.email
       }
 
-      // Include roleCode if user has a role but not for system_admin as per API rules
-      if (userRoleCode && userRoleCode !== 'system_admin') {
-        requestData.roleCode = userRoleCode
+      // Include roleCode if it has changed and not for system_admin as per API rules
+      if (editFormData.roleCode && editFormData.roleCode !== 'system_admin') {
+        // Only include roleCode if it's different from current role
+        const currentRoleCode = typeof selectedUser.role === 'object' && selectedUser.role?.code 
+          ? selectedUser.role.code 
+          : selectedUser.role
+        if (editFormData.roleCode !== currentRoleCode) {
+          requestData.roleCode = editFormData.roleCode
+        }
       }
 
-      // Include profileFields from selectedUser if available
-      if (selectedUser.profileFields && Object.keys(selectedUser.profileFields).length > 0) {
-        requestData.profileFields = selectedUser.profileFields
+      // Include avatar if it has changed
+      if (editFormData.avatar !== selectedUser.avatar) {
+        requestData.avatar = editFormData.avatar || undefined
       }
 
-      // Include avatar if user has one
-      if (selectedUser.avatar) {
-        requestData.avatar = selectedUser.avatar
+      // Include profileFields if they have changed
+      const currentProfileFields = selectedUser.profileFields || {}
+      const hasProfileFieldsChanged = 
+        JSON.stringify(editFormData.profileFields) !== JSON.stringify(currentProfileFields)
+      
+      if (hasProfileFieldsChanged && Object.keys(editFormData.profileFields).length > 0) {
+        requestData.profileFields = editFormData.profileFields
       }
 
       editUserMutation.mutate({
@@ -274,10 +336,28 @@ function UserManagementPageContent({ user, logout }: UserManagementPageProps) {
 
   const totalPages = usersData ? Math.ceil(usersData.total / pageSize) : 0
 
-  if (error) {
+  // 检查是否有任何关键的加载状态（只关心用户数据加载）
+  const isAnyLoading = isUsersLoading
+  
+  // 检查关键错误（角色错误不阻止主页面显示）
+  const hasError = usersError || clubsError
+  const errorMessage = usersError?.message || clubsError?.message || '加载数据失败'
+
+  if (isAnyLoading) {
     return (
       <div className="p-8 text-center">
-        <div className="text-red-500 mb-4">加载用户数据失败</div>
+        <div className="flex items-center justify-center space-x-2">
+          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-gray-900"></div>
+          <span>加载中...</span>
+        </div>
+      </div>
+    )
+  }
+
+  if (hasError) {
+    return (
+      <div className="p-8 text-center">
+        <div className="text-red-500 mb-4">{errorMessage}</div>
         <Button onClick={() => window.location.reload()}>重新加载</Button>
       </div>
     )
@@ -291,6 +371,10 @@ function UserManagementPageContent({ user, logout }: UserManagementPageProps) {
           <h1 className="text-2xl font-bold text-gray-900">用户管理</h1>
           <p className="text-gray-600 mt-1">管理系统中的所有用户账号</p>
         </div>
+        <Button onClick={() => setIsCreateClubAdminDialogOpen(true)}>
+          <UserPlus className="h-4 w-4 mr-2" />
+          创建社团管理员
+        </Button>
       </div>
 
       {/* 统计卡片 */}
@@ -435,7 +519,7 @@ function UserManagementPageContent({ user, logout }: UserManagementPageProps) {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {isLoading ? (
+                {isUsersLoading ? (
                   <TableRow>
                     <TableCell colSpan={5} className="text-center py-8">
                       加载中...
@@ -660,7 +744,7 @@ function UserManagementPageContent({ user, logout }: UserManagementPageProps) {
           <DialogHeader>
             <DialogTitle>编辑用户</DialogTitle>
             <DialogDescription>
-              修改用户的基本信息和状态
+              修改用户的基本信息、角色、状态和档案字段
             </DialogDescription>
           </DialogHeader>
             <div className="space-y-6">
@@ -682,7 +766,34 @@ function UserManagementPageContent({ user, logout }: UserManagementPageProps) {
                     placeholder="请输入邮箱"
                   />
                 </div>
-                <div className="col-span-2">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">用户角色</label>
+                  <Select
+                    value={editFormData.roleCode}
+                    onValueChange={(value) => setEditFormData(prev => ({ ...prev, roleCode: value }))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="选择用户角色" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {rolesData && Array.isArray(rolesData) ? (
+                        rolesData.map((role) => (
+                          <SelectItem key={role.id} value={role.code}>
+                            {role.name}
+                          </SelectItem>
+                        ))
+                      ) : (
+                        <>
+                          <SelectItem value="candidate">候选人</SelectItem>
+                          <SelectItem value="club_admin">社团管理员</SelectItem>
+                          <SelectItem value="interviewer">面试官</SelectItem>
+                          <SelectItem value="admin">管理员</SelectItem>
+                        </>
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">状态</label>
                   <Select
                     value={editFormData.status}
@@ -701,12 +812,36 @@ function UserManagementPageContent({ user, logout }: UserManagementPageProps) {
                   </Select>
                 </div>
                 <div className="col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">头像URL</label>
+                  <Input
+                    value={editFormData.avatar}
+                    onChange={(e) => setEditFormData(prev => ({ ...prev, avatar: e.target.value }))}
+                    placeholder="请输入头像图片URL（可选）"
+                  />
+                </div>
+                <div className="col-span-2">
                   <label className="block text-sm font-medium text-gray-700 mb-2">状态修改原因</label>
                   <Textarea
                     value={editFormData.statusReason}
                     onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setEditFormData(prev => ({ ...prev, statusReason: e.target.value }))}
                     placeholder="请输入状态修改的原因（可选）"
-                    rows={3}
+                    rows={2}
+                  />
+                </div>
+                <div className="col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">档案字段 (JSON格式)</label>
+                  <Textarea
+                    value={JSON.stringify(editFormData.profileFields, null, 2)}
+                    onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => {
+                      try {
+                        const parsed = JSON.parse(e.target.value)
+                        setEditFormData(prev => ({ ...prev, profileFields: parsed }))
+                      } catch {
+                        // 如果解析失败，保持原值
+                      }
+                    }}
+                    placeholder='{"studentId": "2022001001", "major": "计算机科学", "grade": "2022级"}'
+                    rows={4}
                   />
                 </div>
               </div>
@@ -750,6 +885,77 @@ function UserManagementPageContent({ user, logout }: UserManagementPageProps) {
               disabled={deleteUserMutation.isPending}
             >
               {deleteUserMutation.isPending ? '删除中...' : '确认删除'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 创建社团管理员对话框 */}
+      <Dialog open={isCreateClubAdminDialogOpen} onOpenChange={setIsCreateClubAdminDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>创建社团管理员账号</DialogTitle>
+            <DialogDescription>
+              创建一个新的社团管理员账号
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-6">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">姓名</label>
+                <Input
+                  value={createClubAdminForm.name}
+                  onChange={(e) => setCreateClubAdminForm(prev => ({ ...prev, name: e.target.value }))}
+                  placeholder="请输入管理员姓名"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">邮箱</label>
+                <Input
+                  type="email"
+                  value={createClubAdminForm.email}
+                  onChange={(e) => setCreateClubAdminForm(prev => ({ ...prev, email: e.target.value }))}
+                  placeholder="请输入邮箱地址"
+                />
+              </div>
+              <div className="col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-2">密码</label>
+                <Input
+                  type="password"
+                  value={createClubAdminForm.password}
+                  onChange={(e) => setCreateClubAdminForm(prev => ({ ...prev, password: e.target.value }))}
+                  placeholder="请输入初始密码（最少6位）"
+                />
+              </div>
+              <div className="col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-2">选择社团</label>
+                <Select
+                  value={createClubAdminForm.clubId}
+                  onValueChange={(value) => setCreateClubAdminForm(prev => ({ ...prev, clubId: value }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="请选择要管理的社团" />
+                  </SelectTrigger>
+                  <SelectContent>
+                     {(clubsData?.data ?? []).map((club: Club) => (
+                       <SelectItem key={club.id} value={club.id}>
+                         {club.name}
+                       </SelectItem>
+                     ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsCreateClubAdminDialogOpen(false)}>
+              取消
+            </Button>
+            <Button 
+              onClick={() => createClubAdminMutation.mutate(createClubAdminForm)}
+              disabled={createClubAdminMutation.isPending || !createClubAdminForm.email || !createClubAdminForm.password || !createClubAdminForm.name || !createClubAdminForm.clubId}
+            >
+              {createClubAdminMutation.isPending ? '创建中...' : '创建账号'}
             </Button>
           </DialogFooter>
         </DialogContent>

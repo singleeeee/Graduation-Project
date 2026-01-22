@@ -190,23 +190,23 @@ class AxiosService {
   }
 
   // 公共方法
-  public async get<T = any>(url: string, config?: AxiosRequestConfig): Promise<ApiResponse<T>> {
+  public async get<T = any>(url: string, config?: AxiosRequestConfig): Promise<T> {
     return this.instance.get(url, config)
   }
 
-  public async post<T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<ApiResponse<T>> {
+  public async post<T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<T> {
     return this.instance.post(url, data, config)
   }
 
-  public async put<T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<ApiResponse<T>> {
+  public async put<T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<T> {
     return this.instance.put(url, data, config)
   }
 
-  public async delete<T = any>(url: string, config?: AxiosRequestConfig): Promise<ApiResponse<T>> {
+  public async delete<T = any>(url: string, config?: AxiosRequestConfig): Promise<T> {
     return this.instance.delete(url, config)
   }
 
-  public async patch<T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<ApiResponse<T>> {
+  public async patch<T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<T> {
     return this.instance.patch(url, data, config)
   }
 

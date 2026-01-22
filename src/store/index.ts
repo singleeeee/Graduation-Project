@@ -14,6 +14,7 @@ interface AppState {
       permissions: string[]
     } | null
     permissions: string[]
+    roleCode?: string // 新增: 从角色对象中提取的简化角色代码
   }
   isLoading: boolean
   setUser: (user: Partial<AppState['user']>) => void
@@ -35,14 +36,28 @@ export const useAppStore = create<AppState>((set, get) => ({
     permissions: []
   },
   isLoading: false,
-    setUser: (user) => set((state) => ({ 
-      user: { 
-        ...state.user, 
-        ...user,
-        // Ensure permissions is always an array
-        permissions: user.permissions || state.user.permissions || []
-      } 
-    })),
+    setUser: (user) => set((state) => { 
+      // 从角色信息中提取roleCode
+      let roleCode: string | undefined
+      if (typeof user.role === 'string') {
+        roleCode = user.role
+      } else if (user.role && typeof user.role === 'object' && user.role.code) {
+        roleCode = user.role.code
+      } else if (state.user.role && typeof state.user.role === 'object' && state.user.role.code) {
+        roleCode = state.user.role.code
+      }
+      
+      return { 
+        user: { 
+          ...state.user, 
+          ...user,
+          // 设置roleCode
+          roleCode,
+          // Ensure permissions is always an array
+          permissions: user.permissions || state.user.permissions || []
+        } 
+      }
+    }),
   setLoading: (loading) => set({ isLoading: loading }),
   logout: async () => {
     try {
@@ -60,7 +75,8 @@ export const useAppStore = create<AppState>((set, get) => ({
         name: null,
         email: null,
         role: null,
-        permissions: []
+        permissions: [],
+        roleCode: undefined
       }
     })
   },
@@ -70,18 +86,18 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   hasRole: (role: string) => {
     const { user } = get()
-    return user.role === role
+    return user.roleCode === role || user.role === role
   },
   isAdmin: () => {
     const { user } = get()
-    return user.role === 'super_admin'
+    return user.roleCode === 'super_admin' || user.role === 'super_admin'
   },
   isCandidate: () => {
     const { user } = get()
-    return user.role === 'candidate'
+    return user.roleCode === 'candidate' || user.role === 'candidate'
   },
   isInterviewer: () => {
     const { user } = get()
-    return user.role === 'interviewer'
+    return user.roleCode === 'interviewer' || user.role === 'interviewer'
   },
 }))

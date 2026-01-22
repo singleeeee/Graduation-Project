@@ -127,3 +127,29 @@ export interface UserListResponse {
   limit: number
   totalPages: number
 }
+
+// 创建社团管理员账号请求
+export interface CreateClubAdminRequest {
+  email: string
+  password: string
+  name: string
+  clubId: string
+}
+
+// 创建社团管理员账号响应
+export interface CreateClubAdminResponse {
+  message: string
+  user: UserProfile & {
+    club: {
+      id: string
+      name: string
+    }
+  }
+}
+
+// 统一更新用户信息响应
+export interface UpdateUserResponse {
+  message: string
+  user: UserProfile
+  updatedFields: string[]
+}

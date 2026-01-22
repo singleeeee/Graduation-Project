@@ -19,8 +19,8 @@ import type {
   RolePermissionCodesResponse
 } from './types'
 
-const ROLES_BASE_URL = '/api/v1/roles'
-const PERMISSIONS_BASE_URL = '/api/v1/permissions'
+const ROLES_BASE_URL = '/roles'
+const PERMISSIONS_BASE_URL = '/permissions'
 
 /**
  * 角色管理API
@@ -28,7 +28,7 @@ const PERMISSIONS_BASE_URL = '/api/v1/permissions'
 const rolesApi = {
   // 获取角色列表
   getRoles: (params?: RoleListParams) => {
-    return axiosService.get<ApiResponse<RoleListResponse>>(
+    return axiosService.get<Role[]>(
       ROLES_BASE_URL,
       { params }
     )
@@ -97,7 +97,7 @@ const rolesApi = {
 
   // 获取角色权限列表
   getRolePermissions: (roleId: string) => {
-    return axiosService.get<ApiResponse<RolePermissionCodesResponse>>(
+    return axiosService.get<RolePermissionCodesResponse>(
       `${ROLES_BASE_URL}/${roleId}/permissions`
     )
   },
@@ -116,7 +116,7 @@ const rolesApi = {
 const permissionsApi = {
   // 获取权限列表
   getPermissions: (params?: PermissionListParams) => {
-    return axiosService.get<ApiResponse<PermissionListResponse>>(
+    return axiosService.get<Permission[]>(
       PERMISSIONS_BASE_URL,
       { params }
     )
@@ -138,7 +138,7 @@ const permissionsApi = {
 
   // 获取所有权限模块
   getPermissionModules: () => {
-    return axiosService.get<ApiResponse<string[]>>(
+    return axiosService.get<string[]>(
       `${PERMISSIONS_BASE_URL}/modules`
     )
   }

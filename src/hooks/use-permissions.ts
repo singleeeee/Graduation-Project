@@ -1,294 +1,254 @@
-import { useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useAppStore } from '@/store'
-import { authApi, rolesApi, usersApi } from '@/lib/api'
-
-// 权限类型定义
-export type Permission = 
-  | 'user_manage'           // 用户管理
-  | 'user_view'             // 查看用户
-  | 'user_create'           // 创建用户
-  | 'user_edit'             // 编辑用户
-  | 'user_delete'           // 删除用户
-  | 'user_export'           // 导出用户
-  | 'registration_field_manage' // 注册字段管理
-  | 'system_settings'       // 系统设置
-  | 'recruitment_manage'    // 招新管理
-  | 'recruitment_view'      // 查看招新
-  | 'application_review'    // 申请审核
-  | 'interview_manage'      // 面试管理
-  | 'statistics_view'       // 查看统计
-  | 'role_manage'           // 角色管理
-  | 'role_view'             // 查看角色
-  | 'permission_manage'     // 权限管理
-  | 'permission_view'       // 查看权限
-  | 'submit_application'    // 提交申请
-  | 'view_application_status' // 查看申请状态
-  | 'edit_profile'          // 编辑个人资料
-  | 'club_manage'          // 社团管理
-  | 'file_manage'          // 文件管理
-
-  // 菜单项权限要求
-  export const MENU_PERMISSIONS: Record<string, Permission[]> = {
-    '/admin/users': ['user_view'],
-    '/admin/clubs': ['user_manage'], // 社团管理需要用户管理权限
-    '/admin/registration-fields': ['registration_field_manage'],
-    '/profile': [], // 个人信息页面，所有已登录用户都可访问
-    '/recruitment': ['recruitment_view'],
-    '/applications': ['view_application_status'],
-    '/screening': ['application_review'],
-    '/interview': ['interview_manage'],
-    '/statistics': ['statistics_view'],
-    '/settings': ['system_settings'],
-  }
-
-// 用户信息接口
-interface User {
-  id: string
-  name: string
-  email: string
-  role: string | { id: string; name: string; code: string; level: number; permissions?: string[] }
-  permissions: Permission[]
-}
-
-// 默认角色权限映射 (用于降级处理)
-const DEFAULT_ROLE_PERMISSIONS: Record<string, Permission[]> = {
-  super_admin: [  // 超级管理员拥有所有权限
-    'user_manage',
-    'user_view',
-    'user_create',
-    'user_edit',
-    'user_delete',
-    'user_export',
-    'registration_field_manage',
-    'system_settings',
-    'recruitment_manage',
-    'recruitment_view',
-    'application_review',
-    'interview_manage',
-    'statistics_view',
-    'role_manage',
-    'role_view',
-    'permission_manage',
-    'permission_view',
-    'submit_application',
-    'view_application_status',
-    'edit_profile',
-    'club_manage',
-    'file_manage',
-  ],
-  system_admin: [
-    'user_manage',
-    'user_view',
-    'user_create',
-    'user_edit',
-    'user_delete',
-    'user_export',
-    'registration_field_manage',
-    'system_settings',
-    'recruitment_manage',
-    'recruitment_view',
-    'application_review',
-    'interview_manage',
-    'statistics_view',
-    'role_manage',
-    'role_view',
-    'submit_application',
-    'view_application_status',
-    'edit_profile',
-  ],
-  club_admin: [
-    'user_view',
-    'recruitment_manage',
-    'recruitment_view',
-    'application_review',
-    'interview_manage',
-    'statistics_view',
-    'edit_profile',
-  ],
-  interviewer: [
-    'recruitment_view',
-    'application_review',
-    'interview_manage',
-    'edit_profile',
-  ],
-  candidate: [
-    'recruitment_view',     // 查看招新信息
-    'submit_application',    // 提交申请
-    'view_application_status', // 查看申请状态  
-    'edit_profile'          // 编辑个人资料
-  ]
-}
+import { rolesApi, permissionsApi } from '@/lib/api'
+import type { Permission, Role } from '@/lib/api'
 
 /**
- * 获取角色的基础权限 (降级处理)
+ * 权限检查 Hook
+ * 提供用户权限验证和角色管理功能
+ * 
+ * @returns 权限检查相关的状态和方法
  */
-function getDefaultPermissionsForRole(roleCode: string): Permission[] {
-  return DEFAULT_ROLE_PERMISSIONS[roleCode] || ['edit_profile'] // 默认至少可以编辑个人资料
-}
+export function usePermissions() {
+  const { user } = useAppStore()
 
-interface UsePermissionsReturn {
-  user: User | null
-  hasPermission: (permission: Permission) => boolean
-  hasAnyPermission: (permissions: Permission[]) => boolean
-  hasAllPermissions: (permissions: Permission[]) => boolean
-  isLoading: boolean
-  error: Error | null
-  checkMenuAccess: (path: string) => boolean
-  refreshPermissions: () => void
-}
-
-export function usePermissions(): UsePermissionsReturn {
-  const { user: authUser, isAuthenticated } = useAppStore()
-  const [user, setUser] = useState<User | null>(null)
-
-  // 获取用户权限的React Query Hook
-  const { data: userPermissions, isLoading, error, refetch } = useQuery({
-    queryKey: ['userPermissions', authUser.id],
-    queryFn: async () => {
-      if (!authUser.id) return []
-      
-      // 如果用户信息中包含了权限，直接使用
-      if (authUser.permissions && Array.isArray(authUser.permissions)) {
-        return authUser.permissions
-      }
-      
-      // 如果角色是对象且包含权限信息
-      if (authUser.role && typeof authUser.role === 'object' && authUser.role.permissions) {
-        return authUser.role.permissions
-      }
-      
-       // 尝试从用户API获取详细信息以提取角色权限
-      try {
-        const response = await usersApi.getUserById(authUser.id!)
-        // 检查响应中的角色信息 - UserProfile.role 可能是对象或字符串
-        const roleData = response.role
-        if (roleData && typeof roleData === 'object' && 'permissions' in roleData) {
-          return roleData.permissions || []
-        }
-        
-        // 如果角色是对象但有code，尝试获取默认权限
-        if (roleData && typeof roleData === 'object' && roleData.code) {
-          return getDefaultPermissionsForRole(roleData.code)
-        }
-        
-        // 如果角色是字符串，直接获取默认权限
-        if (typeof roleData === 'string') {
-          return getDefaultPermissionsForRole(roleData)
-        }
-        
-        return []
-      } catch (error) {
-        console.error('获取用户权限失败:', error)
-        // 降级处理：基于角色级别分配基础权限
-        let roleCode = 'candidate'
-        if (typeof authUser.role === 'string') {
-          roleCode = authUser.role
-        } else if (authUser.role && typeof authUser.role === 'object' && authUser.role.code) {
-          roleCode = authUser.role.code
-        }
-        return getDefaultPermissionsForRole(roleCode)
-      }
-    },
-    enabled: !!authUser.id && isAuthenticated,
-    staleTime: 5 * 60 * 1000, // 5分钟缓存
+  // 获取当前用户角色详情
+  const { data: userRoleData, isLoading: isRoleLoading } = useQuery({
+    queryKey: ['userRole', user?.roleCode],
+    queryFn: () => rolesApi.getRoleByCode(user!.roleCode!),
+    enabled: !!user?.roleCode,
+    staleTime: 5 * 60 * 1000, // 5分钟内不重新获取
   })
 
-  // 从认证系统获取当前用户信息
-  useEffect(() => {
-    const checkAuth = () => {
-      return !!(authUser.id && authUser.email)
-    }
-    
-    if (checkAuth()) {
-      // 处理角色信息：转换为字符串表示用于权限检查
-      let roleCode: string
-      if (authUser.role && typeof authUser.role === 'object' && authUser.role.code) {
-        roleCode = authUser.role.code
-      } else if (authUser.role && typeof authUser.role === 'string') {
-        roleCode = authUser.role
-      } else {
-        roleCode = 'candidate'
-      }
+  // 获取当前用户权限列表
+  const { data: userPermissionsData, isLoading: isPermissionsLoading } = useQuery({
+    queryKey: ['userPermissions', userRoleData?.id],
+    queryFn: () => rolesApi.getRolePermissions(userRoleData!.id),
+    enabled: !!userRoleData?.id,
+    select: (response) => (response as any)?.codes || [],
+    staleTime: 5 * 60 * 1000, // 5分钟内不重新获取
+  })
 
-      const userWithPermissions: User = {
-        id: authUser.id!,
-        name: authUser.name || '',
-        email: authUser.email!,
-        role: authUser.role || roleCode, // 保持原始角色对象/字符串
-        permissions: userPermissions as Permission[] || []
-      }
-      setUser(userWithPermissions)
-    } else {
-      setUser(null)
-    }
-  }, [authUser, userPermissions, isAuthenticated])
-
-  // 检查单个权限
-  const hasPermission = (permission: Permission): boolean => {
-    if (!user) return false
-    
-    // 获取角色代码进行超级管理员检查
-    let roleCode: string
-    if (typeof user.role === 'string') {
-      roleCode = user.role
-    } else if (user.role && typeof user.role === 'object' && user.role.code) {
-      roleCode = user.role.code
-    } else {
-      roleCode = 'candidate'
-    }
-    
+  // 检查用户是否具有指定权限
+  const hasPermission = (permissionCode: string): boolean => {
     // 超级管理员和系统管理员拥有所有权限
-    if (roleCode === 'super_admin' || roleCode === 'system_admin') return true
+    if (user?.roleCode === 'super_admin' || user?.roleCode === 'system_admin') {
+      return true
+    }
     
-    // 检查用户具体权限
-    const userPerms = user.permissions || []
-    return userPerms.includes(permission)
+    if (!userPermissionsData) return false
+    return userPermissionsData.includes(permissionCode)
   }
 
-  // 检查是否有任意一个权限
-  const hasAnyPermission = (permissions: Permission[]): boolean => {
-    return permissions.some(permission => hasPermission(permission))
-  }
-
-  // 检查是否拥有所有权限
-  const hasAllPermissions = (permissions: Permission[]): boolean => {
-    return permissions.every(permission => hasPermission(permission))
-  }
-
-  // 检查菜单访问权限
-  const checkMenuAccess = (path: string): boolean => {
-    const requiredPermissions = MENU_PERMISSIONS[path]
-    if (!requiredPermissions) return true // 如果没有定义权限要求，默认允许访问
+  // 检查用户是否具有任一权限
+  const hasAnyPermission = (permissionCodes: string[]): boolean => {
+    // 超级管理员和系统管理员拥有所有权限
+    if (user?.roleCode === 'super_admin' || user?.roleCode === 'system_admin') {
+      return true
+    }
     
-    return hasAnyPermission(requiredPermissions)
+    if (!userPermissionsData) return false
+    return permissionCodes.some(code => userPermissionsData.includes(code))
+  }
+
+  // 检查用户是否具有所有权限
+  const hasAllPermissions = (permissionCodes: string[]): boolean => {
+    // 超级管理员和系统管理员拥有所有权限
+    if (user?.roleCode === 'super_admin' || user?.roleCode === 'system_admin') {
+      return true
+    }
+    
+    if (!userPermissionsData) return false
+    return permissionCodes.every(code => userPermissionsData.includes(code))
+  }
+
+  // 检查用户角色级别是否足够
+  const hasRoleLevel = (requiredLevel: number): boolean => {
+    if (!userRoleData) return false
+    return userRoleData.level >= requiredLevel
+  }
+
+  // 检查用户是否具有指定角色
+  const hasRole = (roleCode: string): boolean => {
+    return user?.roleCode === roleCode
+  }
+
+  // 检查用户是否具有任一角色
+  const hasAnyRole = (roleCodes: string[]): boolean => {
+    return roleCodes.includes(user?.roleCode || '')
   }
 
   return {
-    user,
+    // 用户角色信息
+    userRole: userRoleData,
+    userPermissions: userPermissionsData,
+    
+    // 权限检查方法
     hasPermission,
     hasAnyPermission,
     hasAllPermissions,
-    isLoading,
-    error,
-    checkMenuAccess,
-    refreshPermissions: refetch,
+    
+    // 角色检查方法
+    hasRoleLevel,
+    hasRole,
+    hasAnyRole,
+    
+    // 加载状态 - 更智能的判断逻辑
+    isLoading: (isRoleLoading || isPermissionsLoading) && (!userRoleData || !userPermissionsData)
   }
 }
 
-// 菜单项接口
-export interface MenuItem {
+/**
+ * 角色管理 Hook
+ * 提供角色相关的数据获取和管理功能
+ */
+export function useRoles(filters?: {
+  page?: number
+  limit?: number
+  search?: string
+  level?: number
+  isActive?: boolean
+}) {
+  const { data, isLoading, error, refetch } = useQuery({
+    queryKey: ['roles', filters],
+    queryFn: () => rolesApi.getRoles(filters),
+    select: (response) => {
+      const data = response?.data?.data || response?.data
+      return {
+        roles: data?.roles || [],
+        total: data?.total || 0,
+        page: data?.page || 1,
+        limit: data?.limit || 10,
+        totalPages: data?.totalPages || 0
+      }
+    }
+  })
+
+  return {
+    roles: data?.roles || [],
+    total: data?.total || 0,
+    page: data?.page || 1,
+    limit: data?.limit || 10,
+    totalPages: data?.totalPages || 0,
+    isLoading,
+    error,
+    refetch
+  }
+}
+
+/**
+ * 权限管理 Hook
+ * 提供权限相关的数据获取和管理功能
+ */
+export function usePermissionsList(filters?: {
+  page?: number
+  limit?: number
+  module?: string
+  search?: string
+}) {
+  const { data, isLoading, error, refetch } = useQuery({
+    queryKey: ['permissions', filters],
+    queryFn: () => permissionsApi.getPermissions(filters),
+    select: (response) => {
+      const data = response?.data?.data || response?.data
+      return {
+        permissions: data?.permissions || [],
+        total: data?.total || 0,
+        page: data?.page || 1,
+        limit: data?.limit || 10,
+        totalPages: data?.totalPages || 0
+      }
+    }
+  })
+
+  return {
+    permissions: data?.permissions || [],
+    total: data?.total || 0,
+    page: data?.page || 1,
+    limit: data?.limit || 10,
+    totalPages: data?.totalPages || 0,
+    isLoading,
+    error,
+    refetch
+  }
+}
+
+/**
+ * 权限模块 Hook
+ * 获取所有权限模块列表
+ */
+export function usePermissionModules() {
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['permissionModules'],
+    queryFn: () => permissionsApi.getPermissionModules(),
+    select: (response) => response?.data?.data || response?.data || []
+  })
+
+  return {
+    modules: data || [],
+    isLoading,
+    error
+  }
+}
+
+/**
+ * 角色详情 Hook
+ * 获取指定角色的详细信息
+ */
+export function useRoleDetail(roleId: string) {
+  const { data, isLoading, error, refetch } = useQuery({
+    queryKey: ['roleDetail', roleId],
+    queryFn: () => rolesApi.getRole(roleId),
+    enabled: !!roleId,
+    select: (response) => response?.data?.data || response?.data
+  })
+
+  return {
+    role: data,
+    isLoading,
+    error,
+    refetch
+  }
+}
+
+/**
+ * 权限详情 Hook
+ * 获取指定权限的详细信息
+ */
+export function usePermissionDetail(permissionId: string) {
+  const { data, isLoading, error, refetch } = useQuery({
+    queryKey: ['permissionDetail', permissionId],
+    queryFn: () => permissionsApi.getPermission(permissionId),
+    enabled: !!permissionId,
+    select: (response) => response?.data?.data || response?.data
+  })
+
+  return {
+    permission: data,
+    isLoading,
+    error,
+    refetch
+  }
+}
+
+/**
+ * 菜单项类型定义
+ */
+interface MenuItem {
   title: string
   icon: string
   href: string
   current: boolean
-  permission?: Permission
-  children?: MenuItem[]
+  permission?: string
+  permissions?: string[]
 }
 
-// 获取基于权限的菜单
+/**
+ * 菜单项 Hook
+ * 根据用户权限动态生成菜单项
+ */
 export function useMenuItems(currentPath: string = '/'): MenuItem[] {
-  const { checkMenuAccess } = usePermissions()
+  const { hasPermission, hasAnyPermission, hasAllPermissions } = usePermissions()
 
   const allMenuItems: MenuItem[] = [
     {
@@ -303,6 +263,13 @@ export function useMenuItems(currentPath: string = '/'): MenuItem[] {
       href: '/admin/users',
       current: currentPath.startsWith('/admin/users'),
       permission: 'user_view',
+    },
+    {
+      title: '角色权限管理',
+      icon: '🛡️',
+      href: '/admin/roles',
+      current: currentPath.startsWith('/admin/roles'),
+      permission: 'role_manage',
     },
     {
       title: '社团管理',
@@ -370,12 +337,20 @@ export function useMenuItems(currentPath: string = '/'): MenuItem[] {
   ]
 
   // 根据权限过滤菜单项
-  const filteredMenuItems = allMenuItems.filter(item => {
-    if (item.permission) {
-      return checkMenuAccess(item.href)
+  return allMenuItems.filter(item => {
+    if (!item.permission && !item.permissions) {
+      return true // 没有权限要求的菜单项总是显示
     }
-    return true
+    
+    if (item.permission) {
+      return hasPermission(item.permission)
+    }
+    
+    if (item.permissions) {
+      // 可以根据需求配置为任一权限或全部权限
+      return hasAnyPermission(item.permissions)
+    }
+    
+    return false
   })
-
-  return filteredMenuItems
 }

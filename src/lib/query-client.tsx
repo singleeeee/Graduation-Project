@@ -11,7 +11,7 @@ export function QueryProvider({ children }: { children: React.ReactNode }) {
       new QueryClient({
         defaultOptions: {
           queries: {
-            staleTime: 60 * 1000,
+            staleTime: 10 * 1000, // 10秒后数据过期，比原来减少5倍
             retry: (failureCount, error: any) => {
               // 不重试401错误（认证错误）
               if (error?.response?.status === 401) {

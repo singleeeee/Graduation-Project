@@ -40,7 +40,7 @@ export interface CreateRoleRequest {
   code: string
   description?: string
   level?: number
-  isActive?: boolean
+  permissionCodes?: string[]
 }
 
 // 更新角色请求
@@ -53,17 +53,17 @@ export interface UpdateRoleRequest {
 
 // 分配权限给角色
 export interface AssignPermissionsRequest {
-  permissionIds: string[]
+  permissionCodes: string[]
 }
 
 // 添加权限请求
 export interface AddPermissionsRequest {
-  permissionIds: string[]
+  permissionCodes: string[]
 }
 
 // 移除权限请求
 export interface RemovePermissionsRequest {
-  permissionIds: string[]
+  permissionCodes: string[]
 }
 
 // 角色列表查询参数

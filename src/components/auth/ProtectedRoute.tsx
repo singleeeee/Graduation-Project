@@ -1,12 +1,12 @@
 import { ReactNode } from 'react'
-import { usePermissions, Permission } from '@/hooks/use-permissions'
+import { usePermissions } from '@/hooks/use-permissions'
 import { Button } from '@/components/ui/button'
 import { AlertTriangle } from 'lucide-react'
 
 interface ProtectedRouteProps {
   children: ReactNode
-  permission?: Permission
-  permissions?: Permission[]
+  permission?: string
+  permissions?: string[]
   requireAll?: boolean
   fallback?: ReactNode
 }
@@ -39,13 +39,14 @@ export function ProtectedRoute({
 }: ProtectedRouteProps) {
   const { hasPermission, hasAnyPermission, hasAllPermissions, isLoading } = usePermissions()
 
-  // 加载中状态
+  // 加载中状态 - 添加超时保护，最多显示3秒loading
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="text-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">加载中...</p>
+          <p className="mt-4 text-gray-600">加载权限信息中...</p>
+          <p className="mt-2 text-xs text-gray-400">如果长时间卡住，请刷新页面</p>
         </div>
       </div>
     )
