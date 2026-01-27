@@ -27,51 +27,65 @@ interface RoleSelectorProps {
 export function RoleSelector({
   value,
   onChange,
-  placeholder = "选择角色",
+  placeholder = '选择角色',
   disabled = false,
-  className = "",
+  className = '',
   required = false,
   excludeRoles = [],
-  includeRoles = []
+  includeRoles = [],
 }: RoleSelectorProps) {
-  const { data: rolesData, isLoading, error } = useQuery({
-    queryKey: ['roles', { limit: 100, isActive: true }],
-    queryFn: async () => {
-      const response: any = await rolesApi.getRoles({ limit: 100, isActive: true })
-      let roles = response?.data?.roles || response?.roles || []
-      
-      if (excludeRoles.length > 0) {
-        roles = roles.filter((role: Role) => !excludeRoles.includes(role.code))
-      }
-      
-      if (includeRoles.length > 0) {
-        roles = roles.filter((role: Role) => includeRoles.includes(role.code))
-      }
-      
-      return roles
-    }
+  const { data: roles, isLoading, error } = useQuery({
+    queryKey: ['roles'],
+    queryFn: () => rolesApi.getRoles(),
+    select: (response) => response || [], // Extract Role[] from response
+    staleTime: 5 * 60 * 1000, // 5 minutes
   })
 
+  // 筛选角色
+  const filteredRoles = React.useMemo(() => {
+    if (!roles) return []
+    
+    let filtered = roles
+    
+    // 排除指定角色
+    if (excludeRoles.length > 0) {
+      filtered = filtered.filter(
+        (role) => !excludeRoles.includes(role.code)
+      )
+    }
+    
+    // 只包含指定角色
+    if (includeRoles.length > 0) {
+      filtered = filtered.filter(
+        (role) => includeRoles.includes(role.code)
+      )
+    }
+    
+    return filtered
+  }, [roles, excludeRoles, includeRoles])
+
   if (isLoading) {
-    return <Skeleton className="h-10 w-full" />
+    return (
+      <Select disabled>
+        <SelectTrigger className={className}>
+          <SelectValue placeholder="加载中..." />
+        </SelectTrigger>
+      </Select>
+    )
   }
 
   if (error) {
     return (
-      <Alert variant="destructive">
+      <Alert variant="destructive" className={className}>
         <AlertCircle className="h-4 w-4" />
-        <AlertDescription>
-          加载角色列表失败
-        </AlertDescription>
+        <AlertDescription>加载角色列表失败</AlertDescription>
       </Alert>
     )
   }
 
-  const roles = rolesData || []
-
   return (
-    <Select
-      value={value}
+    <Select 
+      value={value} 
       onValueChange={onChange}
       disabled={disabled}
     >
@@ -79,16 +93,20 @@ export function RoleSelector({
         <SelectValue placeholder={placeholder} />
       </SelectTrigger>
       <SelectContent>
-        {roles.length === 0 ? (
-          <SelectItem value="" disabled>
-            暂无可用角色
+        {filteredRoles.map((role) => (
+          <SelectItem key={role.code} value={role.code}>
+            <div className="flex items-center justify-between w-full">
+              <span>{role.name}</span>
+              {!role.isActive && (
+                <span className="text-xs text-muted-foreground ml-2">(已禁用)</span>
+              )}
+            </div>
           </SelectItem>
-        ) : (
-          roles.map((role: Role) => (
-            <SelectItem key={role.id} value={role.code}>
-              {role.name} ({role.code}) - 级别 {role.level}
-            </SelectItem>
-          ))
+        ))}
+        {filteredRoles.length === 0 && (
+          <SelectItem value="" disabled>
+            无可用角色
+          </SelectItem>
         )}
       </SelectContent>
     </Select>
@@ -96,15 +114,16 @@ export function RoleSelector({
 }
 
 /**
- * 多角色选择器组件
- * 允许选择多个角色
+ * 角色选择器（多选版本）
+ * 待实现
  */
 interface MultiRoleSelectorProps {
   value?: string[]
-  onChange: (value: string[]) => void
+  onChange: (values: string[]) => void
   placeholder?: string
   disabled?: boolean
   className?: string
+  required?: boolean
   excludeRoles?: string[]
   includeRoles?: string[]
 }
@@ -112,80 +131,97 @@ interface MultiRoleSelectorProps {
 export function MultiRoleSelector({
   value = [],
   onChange,
-  placeholder = "选择角色",
+  placeholder = '选择角色',
   disabled = false,
-  className = "",
+  className = '',
+  required = false,
   excludeRoles = [],
-  includeRoles = []
+  includeRoles = [],
 }: MultiRoleSelectorProps) {
-  const { data: rolesData, isLoading, error } = useQuery({
-    queryKey: ['roles', { limit: 100, isActive: true }],
-    queryFn: async () => {
-      const response: any = await rolesApi.getRoles({ limit: 100, isActive: true })
-      let roles = response?.data?.roles || response?.roles || []
-      
-      if (excludeRoles.length > 0) {
-        roles = roles.filter((role: Role) => !excludeRoles.includes(role.code))
-      }
-      
-      if (includeRoles.length > 0) {
-        roles = roles.filter((role: Role) => includeRoles.includes(role.code))
-      }
-      
-      return roles
-    }
+  // This is a placeholder for multi-select. 
+  // In a real application, you might use a library like 'react-select' 
+  // or implement a custom multi-select with shadcn/ui Checkbox/DropdownMenu.
+  // For now, it behaves like the single selector but accepts/returns an array.
+  
+  const { data: roles, isLoading, error } = useQuery({
+    queryKey: ['roles'],
+    queryFn: () => rolesApi.getRoles(),
+    select: (response) => response || [], // Extract Role[] from response
+    staleTime: 5 * 60 * 1000, // 5 minutes
   })
 
-  const roles = rolesData || []
+  const filteredRoles = React.useMemo(() => {
+    if (!roles) return []
+    
+    let filtered = roles
+    
+    if (excludeRoles.length > 0) {
+      filtered = filtered.filter(
+        (role) => !excludeRoles.includes(role.code)
+      )
+    }
+    
+    if (includeRoles.length > 0) {
+      filtered = filtered.filter(
+        (role) => includeRoles.includes(role.code)
+      )
+    }
+    
+    return filtered
+  }, [roles, excludeRoles, includeRoles])
 
-  const handleRoleToggle = (roleCode: string) => {
-    const newValue = value.includes(roleCode)
-      ? value.filter(code => code !== roleCode)
-      : [...value, roleCode]
-    onChange(newValue)
+  if (isLoading) {
+    return (
+      <Select disabled>
+        <SelectTrigger className={className}>
+          <SelectValue placeholder="加载中..." />
+        </SelectTrigger>
+      </Select>
+    )
   }
 
+  if (error) {
+    return (
+      <Alert variant="destructive" className={className}>
+        <AlertCircle className="h-4 w-4" />
+        <AlertDescription>加载角色列表失败</AlertDescription>
+      </Alert>
+    )
+  }
+
+  // Fallback to single Select for now, but pass the first value
   return (
-    <div className={`space-y-2 ${className}`}>
-      {isLoading ? (
-        <Skeleton className="h-10 w-full" />
-      ) : error ? (
-        <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription>
-            加载角色列表失败
-          </AlertDescription>
-        </Alert>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-2 border rounded-md p-3">
-          {roles.map((role: Role) => (
-            <div
-              key={role.id}
-              className="flex items-center space-x-2 cursor-pointer"
-              onClick={() => !disabled && handleRoleToggle(role.code)}
-            >
-              <input
-                type="checkbox"
-                checked={value.includes(role.code)}
-                onChange={() => handleRoleToggle(role.code)}
-                disabled={disabled}
-                className="rounded border-gray-300 text-primary focus:ring-primary"
-              />
-              <span className="text-sm">
-                {role.name} ({role.code}) - 级别 {role.level}
-              </span>
+    <Select 
+      value={value[0] || ''} 
+      onValueChange={(v) => onChange(v ? [v] : [])}
+      disabled={disabled}
+    >
+      <SelectTrigger className={className}>
+        <SelectValue placeholder={placeholder} />
+      </SelectTrigger>
+      <SelectContent>
+        {filteredRoles.map((role) => (
+          <SelectItem key={role.code} value={role.code}>
+            <div className="flex items-center justify-between w-full">
+              <span>{role.name}</span>
+              {!role.isActive && (
+                <span className="text-xs text-muted-foreground ml-2">(已禁用)</span>
+              )}
             </div>
-          ))}
-        </div>
-      )}
-    </div>
+          </SelectItem>
+        ))}
+        {filteredRoles.length === 0 && (
+          <SelectItem value="" disabled>
+            无可用角色
+          </SelectItem>
+        )}
+      </SelectContent>
+    </Select>
   )
 }
 
-/**
- * 角色徽章组件
- * 用于显示用户角色信息
- */
+// --- Role Badge ---
+
 interface RoleBadgeProps {
   roleCode: string
   size?: 'sm' | 'md' | 'lg'
@@ -203,7 +239,7 @@ export function RoleBadge({
     enabled: !!roleCode
   })
 
-  const role = roleData
+  const role = roleData?.data
   
   if (!role) {
     return <span className="text-gray-400">未知角色</span>

@@ -11,12 +11,14 @@ export function QueryProvider({ children }: { children: React.ReactNode }) {
       new QueryClient({
         defaultOptions: {
           queries: {
-            staleTime: 10 * 1000, // 10秒后数据过期，比原来减少5倍
+            staleTime: 5 * 60 * 1000, // 5分钟后数据过期
+            refetchOnWindowFocus: false, // 窗口聚焦时不自动刷新
             retry: (failureCount, error: any) => {
               // 不重试401错误（认证错误）
               if (error?.response?.status === 401) {
                 return false
               }
+              // 网络错误重试一次
               return failureCount < 1
             },
           },

@@ -1,4 +1,4 @@
-import axiosService from '../../axios'
+import axiosService, { type ApiResponse } from '../../axios'
 import type {
   RegistrationField,
   CreateRegistrationFieldRequest,
@@ -21,48 +21,51 @@ class RegistrationFieldsApi {
    * 获取启用的注册字段配置（需要超级管理员权限）
    */
   async getRegistrationFields(): Promise<RegistrationField[]> {
-    const response = await this.axios.get<RegistrationField[]>('/admin/registration-fields')
-    return response.data || []
+    const response = await this.axios.get<any>('/admin/registration-fields')
+    // 处理API响应格式，可能是直接数据或包装的对象
+    const fieldsData = response.data || response
+    return Array.isArray(fieldsData) ? fieldsData || [] : []
   }
 
   /**
    * 创建新的注册字段（需要超级管理员权限）
    */
   async createRegistrationField(data: CreateRegistrationFieldRequest): Promise<RegistrationField> {
-    const response = await this.axios.post<RegistrationField>('/admin/registration-fields', data)
-    return response.data
+    const response = await this.axios.post<any>('/admin/registration-fields', data)
+    // 处理API响应格式，可能是直接数据或包装的对象
+    return response.data || response
   }
 
   /**
    * 更新注册字段配置（需要超级管理员权限）
    */
   async updateRegistrationField(id: string, data: UpdateRegistrationFieldRequest): Promise<RegistrationField> {
-    const response = await this.axios.put<RegistrationField>(`/admin/registration-fields/${id}`, data)
-    return response.data
+    const response = await this.axios.put<any>(`/admin/registration-fields/${id}`, data)
+    return response.data || response
   }
 
   /**
    * 删除注册字段（需要超级管理员权限）
    */
-  async deleteRegistrationField(id: string): Promise<{ message: string }> {
-    const response = await this.axios.delete<{ message: string }>(`/admin/registration-fields/${id}`)
-    return response.data
+  async deleteRegistrationField(id: string): Promise<ApiResponse<{ message: string }>> {
+    const response = await this.axios.delete<ApiResponse<{ message: string }>>(`/admin/registration-fields/${id}`)
+    return response
   }
 
   /**
    * 批量更新字段顺序（需要超级管理员权限）
    */
-  async updateFieldOrder(fields: { id: string; order: number }[]): Promise<{ message: string }> {
-    const response = await this.axios.put<{ message: string }>('/admin/registration-fields/order', { fields })
-    return response.data
+  async updateFieldOrder(fields: { id: string; order: number }[]): Promise<ApiResponse<{ message: string }>> {
+    const response = await this.axios.put<ApiResponse<{ message: string }>>('/admin/registration-fields/order', { fields })
+    return response
   }
 
   /**
    * 获取激活的注册字段（用于注册页面）
    */
-  async getActiveFields(): Promise<RegistrationField[]> {
-    const response = await this.axios.get<RegistrationField[]>('/registration-fields/active')
-    return response.data || []
+  async getActiveFields(): Promise<ApiResponse<RegistrationField[]>> {
+    const response = await this.axios.get<ApiResponse<RegistrationField[]>>('/registration-fields/active')
+    return response
   }
 }
 

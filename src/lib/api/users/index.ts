@@ -184,7 +184,7 @@ class UsersApi {
    * 根据ID获取用户详情
    */
   async getUserById(id: string): Promise<UserProfile> {
-    const response = await this.axios.get<UserProfile>(`/users/${id}`)
+    const response = await this.axios.get<UserProfile>(`/admin/users/${id}`)
     return this.handleResponse<UserProfile>(response)
   }
 
@@ -192,7 +192,7 @@ class UsersApi {
    * 更新用户状态（需要管理员权限）
    */
   async updateUserStatus(id: string, status: 'active' | 'inactive' | 'suspended'): Promise<{ message: string }> {
-    const response = await this.axios.patch<{ message: string }>(`/users/${id}/status`, { status })
+    const response = await this.axios.patch<{ message: string }>(`/admin/users/${id}/status`, { status })
     return this.handleResponse<{ message: string }>(response)
   }
 
@@ -200,7 +200,7 @@ class UsersApi {
    * 删除用户（需要管理员权限）
    */
   async deleteUser(id: string): Promise<{ message: string }> {
-    const response = await this.axios.delete<{ message: string }>(`/users/${id}`)
+    const response = await this.axios.delete<{ message: string }>(`/admin/users/${id}`)
     return this.handleResponse<{ message: string }>(response)
   }
 

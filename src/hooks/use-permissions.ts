@@ -15,7 +15,11 @@ export function usePermissions() {
   // 获取当前用户角色详情
   const { data: userRoleData, isLoading: isRoleLoading } = useQuery({
     queryKey: ['userRole', user?.roleCode],
-    queryFn: () => rolesApi.getRoleByCode(user!.roleCode!),
+    queryFn: async () => {
+      const response = await rolesApi.getRoleByCode(user!.roleCode!);
+      // 处理API响应包装格式，提取实际的角色数据
+      return response && typeof response === 'object' && 'data' in response ? response.data : response;
+    },
     enabled: !!user?.roleCode,
     staleTime: 5 * 60 * 1000, // 5分钟内不重新获取
   })
@@ -23,7 +27,11 @@ export function usePermissions() {
   // 获取当前用户权限列表
   const { data: userPermissionsData, isLoading: isPermissionsLoading } = useQuery({
     queryKey: ['userPermissions', userRoleData?.id],
-    queryFn: () => rolesApi.getRolePermissions(userRoleData!.id),
+    queryFn: async () => {
+      const response = await rolesApi.getRolePermissions(userRoleData!.id);
+      // 处理API响应包装格式，提取权限代码数组
+      return response && typeof response === 'object' && 'data' in response ? response.data : response;
+    },
     enabled: !!userRoleData?.id,
     select: (response) => (response as any)?.codes || [],
     staleTime: 5 * 60 * 1000, // 5分钟内不重新获取
@@ -113,13 +121,13 @@ export function useRoles(filters?: {
     queryKey: ['roles', filters],
     queryFn: () => rolesApi.getRoles(filters),
     select: (response) => {
-      const data = response?.data?.data || response?.data
+      // rolesApi.getRoles 直接返回 Role[]，不需要额外的数据提取
       return {
-        roles: data?.roles || [],
-        total: data?.total || 0,
-        page: data?.page || 1,
-        limit: data?.limit || 10,
-        totalPages: data?.totalPages || 0
+        roles: Array.isArray(response) ? response : [],
+        total: Array.isArray(response) ? response.length : 0,
+        page: 1,
+        limit: Array.isArray(response) ? response.length : 0,
+        totalPages: 1
       }
     }
   })
@@ -150,13 +158,13 @@ export function usePermissionsList(filters?: {
     queryKey: ['permissions', filters],
     queryFn: () => permissionsApi.getPermissions(filters),
     select: (response) => {
-      const data = response?.data?.data || response?.data
+      // permissionsApi.getPermissions 直接返回 Permission[]，不需要额外的数据提取
       return {
-        permissions: data?.permissions || [],
-        total: data?.total || 0,
-        page: data?.page || 1,
-        limit: data?.limit || 10,
-        totalPages: data?.totalPages || 0
+        permissions: Array.isArray(response) ? response : [],
+        total: Array.isArray(response) ? response.length : 0,
+        page: 1,
+        limit: Array.isArray(response) ? response.length : 0,
+        totalPages: 1
       }
     }
   })
@@ -181,7 +189,10 @@ export function usePermissionModules() {
   const { data, isLoading, error } = useQuery({
     queryKey: ['permissionModules'],
     queryFn: () => permissionsApi.getPermissionModules(),
-    select: (response) => response?.data?.data || response?.data || []
+    select: (response) => {
+      // permissionsApi.getPermissionModules 直接返回数组，不需要额外的数据提取
+      return Array.isArray(response) ? response : []
+    }
   })
 
   return {
@@ -200,7 +211,10 @@ export function useRoleDetail(roleId: string) {
     queryKey: ['roleDetail', roleId],
     queryFn: () => rolesApi.getRole(roleId),
     enabled: !!roleId,
-    select: (response) => response?.data?.data || response?.data
+    select: (response) => {
+      // rolesApi.getRole 返回 ApiResponse<RoleDetail>，需要提取 data
+      return response?.data || response
+    }
   })
 
   return {
@@ -220,7 +234,10 @@ export function usePermissionDetail(permissionId: string) {
     queryKey: ['permissionDetail', permissionId],
     queryFn: () => permissionsApi.getPermission(permissionId),
     enabled: !!permissionId,
-    select: (response) => response?.data?.data || response?.data
+    select: (response) => {
+      // permissionsApi.getPermission 返回 ApiResponse<Permission>，需要提取 data
+      return response?.data || response
+    }
   })
 
   return {
@@ -284,6 +301,13 @@ export function useMenuItems(currentPath: string = '/'): MenuItem[] {
       href: '/admin/registration-fields',
       current: currentPath.startsWith('/admin/registration-fields'),
       permission: 'registration_field_manage',
+    },
+    {
+      title: '招新管理',
+      icon: '📢',
+      href: '/admin/recruitment',
+      current: currentPath.startsWith('/admin/recruitment'),
+      permission: 'recruitment_manage',
     },
     {
       title: '个人信息',

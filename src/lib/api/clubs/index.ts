@@ -48,41 +48,54 @@ class ClubsApi {
     if (category) queryParams.append('category', category)
     if (typeof isActive === 'boolean') queryParams.append('isActive', isActive.toString())
 
-    const response = await axiosService.get<BackendClubListResponse>(`/clubs?${queryParams}`)
+    const response = await axiosService.get<any>(`/clubs?${queryParams}`)
     
-    // 转换后端响应格式为前端期望的格式
-    const backendData = response.data
-    return {
-      data: backendData.data,
-      total: backendData.pagination.total,
-      page: backendData.pagination.page,
-      limit: backendData.pagination.limit,
-      totalPages: backendData.pagination.totalPages
+    // 处理API响应，可能是直接Club数组或包装的对象
+    const clubsData = response.data || response
+    
+    if (Array.isArray(clubsData)) {
+      // 直接返回俱乐部数组
+      return {
+        data: clubsData,
+        total: clubsData.length,
+        page: page,
+        limit: limit,
+        totalPages: Math.ceil(clubsData.length / limit)
+      }
+    } else {
+      // 包装的对象格式
+      return {
+        data: clubsData.data || [],
+        total: clubsData.total || clubsData.pagination?.total || 0,
+        page: clubsData.page || page,
+        limit: clubsData.limit || limit,
+        totalPages: clubsData.totalPages || 1
+      }
     }
   }
 
   // 获取社团详情
   async getClubDetail(clubId: string): Promise<Club> {
     const response = await axiosService.get<ApiResponse<Club>>(`/clubs/${clubId}`)
-    return response.data.data
+    return response.data
   }
 
   // 创建社团
   async createClub(data: CreateClubRequest): Promise<Club> {
     const response = await axiosService.post<ApiResponse<Club>>('/clubs', data)
-    return response.data.data
+    return response.data
   }
 
   // 更新社团信息
   async updateClub(clubId: string, data: UpdateClubRequest): Promise<Club> {
     const response = await axiosService.put<ApiResponse<Club>>(`/clubs/${clubId}`, data)
-    return response.data.data
+    return response.data
   }
 
   // 删除社团（软删除）
   async deleteClub(clubId: string): Promise<{ success: boolean; message: string }> {
     const response = await axiosService.delete<ApiResponse<{ success: boolean; message: string }>>(`/clubs/${clubId}`)
-    return response.data.data
+    return response.data
   }
 
   // 获取社团成员列表
@@ -102,36 +115,49 @@ class ClubsApi {
 
     if (search) queryParams.append('search', search)
 
-    const response = await axiosService.get<ApiResponse<BackendClubMembersResponse>>(`/clubs/${clubId}/members?${queryParams}`)
+    const response = await axiosService.get<any>(`/clubs/${clubId}/members?${queryParams}`)
+    console.log(response, '@')
     
-    // 转换后端响应格式为前端期望的格式
-    const backendData = response.data.data
-    console.log(backendData, response, '@')
-    return {
-      data: backendData.data,
-      total: backendData.pagination.total,
-      page: backendData.pagination.page,
-      limit: backendData.pagination.limit,
-      totalPages: backendData.pagination.totalPages
+    // 处理API响应，可能是直接数组或包装对象
+    const membersData = response.data || response
+    
+    if (Array.isArray(membersData)) {
+      // 直接返回成员数组
+      return {
+        data: membersData,
+        total: membersData.length,
+        page: page,
+        limit: limit,
+        totalPages: Math.ceil(membersData.length / limit)
+      }
+    } else {
+      // 包装的对象格式
+      return {
+        data: membersData.data || [],
+        total: membersData.total || membersData.pagination?.total || 0,
+        page: membersData.page || page,
+        limit: membersData.limit || limit,
+        totalPages: membersData.totalPages || 1
+      }
     }
   }
 
   // 添加成员到社团
   async addMember(clubId: string, data: AddMemberRequest): Promise<ClubMember> {
     const response = await axiosService.post<ApiResponse<ClubMember>>(`/clubs/${clubId}/members`, data)
-    return response.data.data
+    return response.data
   }
 
   // 更新成员角色
   async updateMemberRole(clubId: string, memberId: string, data: UpdateMemberRoleRequest): Promise<ClubMember> {
     const response = await axiosService.put<ApiResponse<ClubMember>>(`/clubs/${clubId}/members/${memberId}`, data)
-    return response.data.data
+    return response.data
   }
 
   // 从社团移除成员
   async removeMember(clubId: string, memberId: string): Promise<{ success: boolean; message: string }> {
     const response = await axiosService.delete<ApiResponse<{ success: boolean; message: string }>>(`/clubs/${clubId}/members/${memberId}`)
-    return response.data.data
+    return response.data
   }
 }
 

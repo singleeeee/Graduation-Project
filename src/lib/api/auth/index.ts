@@ -1,4 +1,4 @@
-import axiosService from '../../axios'
+import axiosService, { type ApiResponse } from '../../axios'
 import type {
   LoginRequest,
   RegisterRequest,
@@ -52,44 +52,63 @@ class AuthApi {
    * 刷新访问令牌
    */
   async refreshToken(refreshToken: string): Promise<{ accessToken: string; refreshToken: string; expiresIn: number }> {
-    const response = await this.axios.post<{ accessToken: string; refreshToken: string; expiresIn: number }>('/auth/refresh', {
+    const response = await this.axios.post<any>('/auth/refresh', {
       refreshToken
     })
     
-    // 自动保存新的令牌
-    if (response.data && response.data.accessToken && response.data.refreshToken) {
-      this.axios.setTokens(response.data.accessToken, response.data.refreshToken)
+    // 自动保存新的令牌 - 处理直接响应格式
+    const tokenData = response.data || response
+    if (tokenData && tokenData.accessToken && tokenData.refreshToken) {
+      this.axios.setTokens(tokenData.accessToken, tokenData.refreshToken)
     }
     
-    return response.data
+    return {
+      accessToken: tokenData.accessToken,
+      refreshToken: tokenData.refreshToken,
+      expiresIn: tokenData.expiresIn || 900
+    }
   }
 
   /**
    * 用户登出
    */
   async logout(): Promise<{ message: string }> {
-    const response = await this.axios.post<{ message: string }>('/auth/logout')
+    const response = await this.axios.post<any>('/auth/logout')
     
     // 清除本地存储的令牌
     this.axios.clearAllTokens()
     
-    return response.data
+    // 处理直接响应格式
+    const logoutData = response.data || response
+    return {
+      message: logoutData.message || 'Logged out successfully'
+    }
   }
 
   /**
    * 检查服务器健康状态
    */
   async healthCheck(): Promise<{ status: string; timestamp: string }> {
-    const response = await this.axios.get<{ status: string; timestamp: string }>('/health')
-    return response.data
+    const response = await this.axios.get<any>('/health')
+    // 处理直接响应格式
+    const healthData = response.data || response
+    return {
+      status: healthData.status || 'unknown',
+      timestamp: healthData.timestamp || new Date().toISOString()
+    }
   }
 
   /**
    * 验证当前令牌是否有效
    */
   async validateToken(): Promise<{ valid: boolean; user: UserProfileBasic }> {
-    const response = await this.axios.get<{ valid: boolean; user: UserProfileBasic }>('/auth/validate')
-    return response.data
+    const response = await this.axios.get<any>('/auth/validate')
+    // 处理直接响应格式
+    const tokenData = response.data || response
+    return {
+      valid: tokenData.valid || false,
+      user: tokenData.user || null
+    }
   }
 
   /**
