@@ -20,6 +20,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
 import { useRecruitment, useClubsForSelection, useRegistrationFieldsForSelection } from '@/hooks/use-recruitment'
 import type { CreateRecruitmentBatchRequest, Club, RegistrationField } from '@/lib/api'
+import { recruitmentApi } from '@/lib/api'
 import { toast } from 'sonner'
 
 // Zod schema for form validation - same as creation but maybe we add id or other edit specific validations if needed
@@ -97,30 +98,32 @@ export default function EditRecruitmentPage() {
     setValue('requiredFields', updatedFields)
   }
 
-  // TODO: Implement the actual update API call for RecruitmentBatch
-  // For now, let's log the data and show a placeholder message
+  // 实现实际的更新批次的 API 调用
   const onSubmit = async (data: CreateRecruitmentBatchRequest) => {
     console.log('Form submission data for update:', data)
     const processedData: CreateRecruitmentBatchRequest = {
       ...data,
       requiredFields: data.requiredFields || [],
-      customQuestions: [] // Placeholder
+      customQuestions: [] // Placeholder - will be implemented in future iterations
     }
     console.log('Processed data for API update:', processedData)
 
     try {
-      // TODO: Replace with actual API call to update the recruitment batch
-      // Example: await recruitmentApi.updateRecruitmentBatch(id, processedData)
-      toast.info('编辑招新批次功能待开发，将使用创建接口模拟更新。') // Placeholder message
+      // 调用实际的 API 更新招新批次
+      const response = await recruitmentApi.updateRecruitmentBatch(id, processedData)
       
-      // Simulate API call success
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      toast.success('招新批次更新成功！')
-      router.push(`/admin/recruitment/${id}`) // Redirect back to the detail page
+      if (response && response.success) {
+        toast.success('招新批次更新成功！')
+        router.push(`/admin/recruitment/${id}`) // Redirect back to the detail page
+      } else if (response) {
+        throw new Error(response.message || '更新失败')
+      } else {
+        throw new Error('服务器响应异常')
+      }
     } catch (error) {
       console.error('更新招新批次失败:', error)
-      toast.error('更新招新批次失败，请重试。')
+      const errorMessage = error instanceof Error ? error.message : '未知错误'
+      toast.error(`更新招新批次失败: ${errorMessage}`)
     }
   }
 
@@ -182,7 +185,7 @@ export default function EditRecruitmentPage() {
                     <SelectValue placeholder="请选择社团" />
                   </SelectTrigger>
                   <SelectContent>
-                    {clubs.map((club) => (
+                    {clubs.map((club: Club) => (
                       <SelectItem key={club.id} value={club.id}>
                         {club.name}
                       </SelectItem>
@@ -227,7 +230,7 @@ export default function EditRecruitmentPage() {
                   {registrationFields.length === 0 ? (
                     <p className="text-gray-500">暂无可选注册字段。</p>
                   ) : (
-                    registrationFields.map((field) => (
+                    registrationFields.map((field: RegistrationField) => (
                       <div key={field.id} className="flex items-center">
                         <Checkbox
                           id={`field-${field.id}`}

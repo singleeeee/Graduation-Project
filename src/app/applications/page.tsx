@@ -1,13 +1,24 @@
-import React from 'react'
+'use client'
+
+import { useMyApplications } from '@/hooks/use-applications'
+import { Loader2, Clock, CheckCircle, XCircle, AlertCircle } from 'lucide-react'
 import Link from 'next/link'
-import { Clock, CheckCircle, XCircle, AlertCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
-import { CandidateLayout } from '@/components/layout/CandidateLayout'
+import { Badge } from '@/components/ui/badge'
 
 export default function ApplicationsPage() {
-  // TODO: 实现获取申请列表的逻辑
-  const applications = [] // 暂时为空
+  // 使用Hook获取我的申请列表
+  const { data, isLoading, isError, error } = useMyApplications()
+  
+  // FIX: Handle the proper data structure from API
+  const applications = data?.applications || data?.data || []
+  
+  // 调试日志
+  console.log('Applications data:', data)
+  console.log('Applications loading:', isLoading)
+  console.log('Applications error:', error)
+  console.log('Applications length:', applications.length)
 
   const getStatusInfo = (status: string) => {
     switch (status) {
@@ -35,6 +46,36 @@ export default function ApplicationsPage() {
           icon: XCircle,
           color: 'text-red-600'
         }
+      case 'interview_scheduled':
+        return {
+          label: '已安排面试',
+          icon: Clock,
+          color: 'text-purple-600'
+        }
+      case 'interview_completed':
+        return {
+          label: '面试完成',
+          icon: CheckCircle,
+          color: 'text-green-600'
+        }
+      case 'offer_sent':
+        return {
+          label: '已发Offer',
+          icon: CheckCircle,
+          color: 'text-green-600'
+        }
+      case 'accepted':
+        return {
+          label: '已接受',
+          icon: CheckCircle,
+          color: 'text-green-600'
+        }
+      case 'declined':
+        return {
+          label: '已拒绝',
+          icon: XCircle,
+          color: 'text-gray-600'
+        }
       default:
         return {
           label: '未知',
@@ -44,12 +85,41 @@ export default function ApplicationsPage() {
     }
   }
 
+  // 加载状态
+  if (isLoading) {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="h-8 w-8 animate-spin mr-2" />
+          <span>加载申请列表...</span>
+        </div>
+      </div>
+    )
+  }
+
+  // 错误状态
+  if (isError) {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <Card className="text-center py-12">
+          <CardHeader>
+            <CardTitle>加载失败</CardTitle>
+            <CardDescription>
+              无法获取申请列表，请刷新页面重试
+            </CardDescription>
+          </CardHeader>
+          <CardFooter className="justify-center">
+            <Button onClick={() => window.location.reload()}>
+              重新加载
+            </Button>
+          </CardFooter>
+        </Card>
+      </div>
+    )
+  }
+
   return (
-    <CandidateLayout 
-      title="我的申请"
-      subtitle="查看和管理你的社团申请"
-      showStats={false}
-    >
+    <div className="container mx-auto px-4 py-8">
       <div className="flex items-center justify-between mb-8">
         <div className="flex items-center gap-4">
           <Link href="/recruitment">
@@ -83,9 +153,9 @@ export default function ApplicationsPage() {
                 <CardHeader>
                   <div className="flex items-start justify-between">
                     <div>
-                      <CardTitle>{application.recruitment.title}</CardTitle>
+                      <CardTitle>{application.recruitment?.title || '未知招新'}</CardTitle>
                       <CardDescription>
-                        {application.recruitment.club.name}
+                        {application.recruitment?.club?.name || '未知社团'}
                       </CardDescription>
                     </div>
                     <div className={`flex items-center gap-2 ${statusInfo.color}`}>
@@ -98,18 +168,23 @@ export default function ApplicationsPage() {
                   <div className="text-sm text-gray-600 space-y-1">
                     <p>申请时间: {new Date(application.createdAt).toLocaleString('zh-CN')}</p>
                     <p>最后更新: {new Date(application.updatedAt).toLocaleString('zh-CN')}</p>
+                    {application.submittedAt && (
+                      <p>提交时间: {new Date(application.submittedAt).toLocaleString('zh-CN')}</p>
+                    )}
                   </div>
                 </CardContent>
                 <CardFooter>
-                  <Button variant="outline" size="sm">
-                    查看详情
-                  </Button>
+                  <Link href={`/applications/${application.id}`}>
+                    <Button variant="outline" size="sm">
+                      查看详情
+                    </Button>
+                  </Link>
                 </CardFooter>
               </Card>
             )
           })}
         </div>
       )}
-    </CandidateLayout>
+    </div>
   )
 }

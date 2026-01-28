@@ -4,15 +4,19 @@ import React from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { RecruitmentBatchForm } from '@/components/recruitment/RecruitmentBatchForm'
-import { useCreateRecruitment } from '@/hooks/use-recruitment'
+import { useCreateRecruitmentBatch } from '@/hooks/use-recruitment'
 import { useClubsForSelection, useRegistrationFieldsForSelection } from '@/hooks/use-recruitment'
 import type { CreateRecruitmentBatchRequest } from '@/lib/api/recruitment/types'
+import type { Club, RegistrationField } from '@/lib/api'
 
 export default function NewRecruitmentPage() {
   const router = useRouter()
-  const createRecruitmentMutation = useCreateRecruitment()
+  const createRecruitmentMutation = useCreateRecruitmentBatch()
   const { data: clubsData, isLoading: clubsLoading } = useClubsForSelection()
   const { data: fieldsData, isLoading: fieldsLoading } = useRegistrationFieldsForSelection()
+
+  console.log('Clubs data:', clubsData)
+  console.log('Fields data:', fieldsData)
 
   const handleSubmit = async (data: CreateRecruitmentBatchRequest) => {
     try {
@@ -28,12 +32,12 @@ export default function NewRecruitmentPage() {
     }
   }
 
-  const clubOptions = clubsData?.map(club => ({
+  const clubOptions = clubsData?.map((club: Club) => ({
     id: club.id,
     name: club.name
   })) || []
 
-  const registrationFieldOptions = fieldsData?.map(field => ({
+  const registrationFieldOptions = fieldsData?.map((field: RegistrationField) => ({
     id: field.id,
     name: field.fieldLabel || field.fieldName,
     fieldKey: field.fieldName

@@ -25,13 +25,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { Loader2, FileText, Upload } from 'lucide-react'
-import { CandidateLayout } from '@/components/layout/CandidateLayout'
+import { Loader2, Plus, X, Upload } from 'lucide-react'
 import { recruitmentApi, registrationFieldsApi } from '@/lib/api'
 import { useActiveRegistrationFields } from '@/hooks/use-recruitment'
 import { toast } from 'sonner'
+import { useCreateApplication } from '@/hooks/use-applications'
+import type { CreateApplicationRequest } from '@/lib/api/applications/types'
 
 
 export default function NewApplicationPage() {
@@ -39,8 +41,9 @@ export default function NewApplicationPage() {
   const router = useRouter()
   const recruitmentId = searchParams.get('recruitmentId')
   
-  const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [experiences, setExperiences] = useState<any[]>([])
+  const [attachments, setAttachments] = useState<any[]>([])
 
   // 获取招新详情
   const { data: recruitmentData, isLoading } = useQuery({
@@ -56,15 +59,16 @@ export default function NewApplicationPage() {
   const { data: allRegistrationFields = [], isLoading: isFieldsLoading } = useActiveRegistrationFields()
 
   // 根据requiredFields筛选出需要的字段
-  const requiredRegistrationFields = allRegistrationFields.filter(field => 
+  const requiredRegistrationFields = allRegistrationFields.filter((field: any) => 
     recruitment?.requiredFields?.includes(field.id)
   )
 
-  // 动态创建表单验证schema
+  // 动态创建表单验证schema - 只基于requireField配置的字段
   const dynamicFormSchema = React.useMemo(() => {
     const fieldSchemas: Record<string, any> = {}
     
-    requiredRegistrationFields.forEach(field => {
+    // 只处理requireField配置的字段
+    requiredRegistrationFields.forEach((field: any) => {
       let schema: any = z.string()
       
       // 根据字段类型添加不同的验证规则
@@ -72,8 +76,6 @@ export default function NewApplicationPage() {
         schema = z.string().email('请输入正确的邮箱格式')
       } else if (field.fieldType === 'number') {
         schema = z.string().regex(/^\d+$/, '请输入有效的数字')
-      } else {
-        schema = z.string()
       }
       
       // 添加必填验证
@@ -196,36 +198,20 @@ export default function NewApplicationPage() {
     resolver: zodResolver(dynamicFormSchema),
     defaultValues: React.useMemo(() => {
       const defaults: Record<string, string> = {}
-      requiredRegistrationFields.forEach(field => {
-        defaults[field.fieldName] = ''
-      })
+    // 初始化requireField配置的字段
+    requiredRegistrationFields.forEach((field: any) => {
+      defaults[field.fieldName] = ''
+    })
       return defaults
     }, [requiredRegistrationFields]),
     // 添加以下配置来处理受控组件
     mode: 'onChange', // 启用onChange模式
   })
 
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
-    if (file) {
-      // 检查文件大小 (最大5MB)
-      if (file.size > 5 * 1024 * 1024) {
-        toast.error('文件大小不能超过5MB')
-        return
-      }
-      
-      // 检查文件类型
-      const allowedTypes = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document']
-      if (!allowedTypes.includes(file.type)) {
-        toast.error('只支持PDF或Word文档格式')
-        return
-      }
-      
-      setSelectedFile(file)
-    }
-  }
 
-  const handleSubmit = async (data: DynamicFormData) => {
+  const createApplicationMutation = useCreateApplication()
+
+  const handleSubmit = async (formData: DynamicFormData) => {
     if (!recruitmentId) {
       toast.error('招新信息无效')
       return
@@ -234,16 +220,24 @@ export default function NewApplicationPage() {
     setIsSubmitting(true)
 
     try {
-      // TODO: 实现申请提交逻辑
-      // 这里需要根据后端API进行调整
-      
-      console.log('提交申请:', {
+      // 准备提交数据，适配新的接口格式
+      const applicationData = {
         recruitmentId,
-        formData: data,
-        resume: selectedFile, // 可能为null，表示没有上传简历
-        requiredFields: requiredRegistrationFields
-      })
+        resumeText: '', // 暂时留空，后续可以添加简历文本输入
+        formData: Object.entries(formData).reduce((acc, [key, value]) => {
+          // 只包含非空值的字段
+          if (value && value.toString().trim() !== '') {
+            acc[key] = value
+          }
+          return acc
+        }, {} as Record<string, any>),
+        experiences: experiences.length > 0 ? experiences : [], // 只有有经历时才包含
+        attachments: attachments.length > 0 ? attachments : [] // 只有有附件时才包含
+      }
 
+      // 使用mutation提交申请
+      await createApplicationMutation.mutateAsync(applicationData as any)
+      
       toast.success('申请提交成功！')
       router.push('/applications') // 跳转到申请列表页面
       
@@ -257,36 +251,36 @@ export default function NewApplicationPage() {
 
   if (isLoading) {
     return (
-      <CandidateLayout title="提交申请" showStats={false}>
+      <div className="container mx-auto px-4 py-8">
         <div className="flex items-center justify-center py-12">
           <Loader2 className="h-8 w-8 animate-spin mr-2" />
           <span>加载招新信息...</span>
         </div>
-      </CandidateLayout>
+      </div>
     )
   }
 
   // 加载注册字段
   if (isFieldsLoading) {
     return (
-      <CandidateLayout title="提交申请" showStats={false}>
+      <div className="container mx-auto px-4 py-8">
         <div className="flex items-center justify-center py-12">
           <Loader2 className="h-8 w-8 animate-spin mr-2" />
           <span>加载表单字段...</span>
         </div>
-      </CandidateLayout>
+      </div>
     )
   }
 
   if (!recruitment) {
     return (
-      <CandidateLayout title="提交申请" showStats={false}>
+      <div className="container mx-auto px-4 py-8">
         <Alert variant="destructive">
           <AlertDescription>
             招新信息不存在或已结束
           </AlertDescription>
         </Alert>
-      </CandidateLayout>
+      </div>
     )
   }
 
@@ -298,18 +292,18 @@ export default function NewApplicationPage() {
 
   if (!canApply) {
     return (
-      <CandidateLayout title="提交申请" showStats={false}>
+      <div className="container mx-auto px-4 py-8">
         <Alert>
           <AlertDescription>
             该招新批次已结束或申请人数已满
           </AlertDescription>
         </Alert>
-      </CandidateLayout>
+      </div>
     )
   }
 
   return (
-    <CandidateLayout title="提交申请" showStats={false}>
+    <div className="container mx-auto px-4 py-8">
       {/* 招新信息卡片 */}
       <Card className="mb-8">
         <CardHeader>
@@ -356,12 +350,12 @@ export default function NewApplicationPage() {
         <CardContent>
           <Form {...form}>
             <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
-              {/* 动态必填字段 */}
-              {requiredRegistrationFields.length > 0 && (
+              {/* 根据requireField配置的字段 */}
+              {requiredRegistrationFields.length > 0 ? (
                 <div className="space-y-6">
-                  {requiredRegistrationFields.map((field) => (
+                  {requiredRegistrationFields.map((field: any, index: number) => (
                     <FormField
-                      key={field.id}
+                      key={`${field.id}-${index}`}
                       control={form.control}
                       name={field.fieldName}
                       render={({ field: formField }) => (
@@ -381,6 +375,10 @@ export default function NewApplicationPage() {
                       )}
                     />
                   ))}
+                </div>
+              ) : (
+                <div className="text-center py-8 text-gray-500">
+                  <p>暂无必填字段配置</p>
                 </div>
               )}
 
@@ -410,56 +408,269 @@ export default function NewApplicationPage() {
                 </div>
               )}
 
-              {/* 简历上传 */}
+              {/* 相关经历 */}
               <div className="space-y-4 border-t pt-6">
-                <FormLabel>简历上传（可选）</FormLabel>
-                <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
-                  <input
-                    type="file"
-                    accept=".pdf,.doc,.docx"
-                    onChange={handleFileChange}
-                    className="hidden"
-                    id="resume-upload"
-                  />
-                  <label htmlFor="resume-upload" className="cursor-pointer">
-                    {selectedFile ? (
-                      <div className="space-y-2">
-                        <FileText className="h-8 w-8 text-green-500 mx-auto" />
-                        <p className="text-green-600 font-medium">{selectedFile.name}</p>
-                        <p className="text-sm text-gray-500">
-                          文件大小: {(selectedFile.size / 1024 / 1024).toFixed(2)} MB
-                        </p>
-                        <Button type="button" variant="outline" onClick={() => setSelectedFile(null)}>
-                          重新选择
-                        </Button>
-                      </div>
-                    ) : (
-                      <div className="space-y-2">
-                        <Upload className="h-8 w-8 text-gray-400 mx-auto" />
-                        <p className="text-gray-600">点击选择文件或拖拽文件到这里</p>
-                        <p className="text-sm text-gray-500">支持PDF、Word格式，最大5MB</p>
-                        <Button type="button" variant="outline">
-                          选择文件
-                        </Button>
-                      </div>
-                    )}
-                  </label>
+                <div className="flex justify-between items-center">
+                  <h3 className="text-lg font-semibold">相关经历</h3>
+                  <Button 
+                    type="button" 
+                    onClick={() => {
+                      setExperiences([...experiences, {
+                        type: 'project',
+                        title: '',
+                        description: '',
+                        startDate: '',
+                        endDate: '',
+                        skills: [],
+                        achievements: ''
+                      }])
+                    }}
+                  >
+                    <Plus className="h-4 w-4 mr-1" />
+                    添加经历
+                  </Button>
                 </div>
+                
+                {experiences.map((exp, index) => (
+                  <Card key={index} className="p-4">
+                    <div className="space-y-4">
+                      <div className="flex justify-between items-start">
+                        <h4 className="font-medium">经历 {index + 1}</h4>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            const newExperiences = experiences.filter((_, i) => i !== index)
+                            setExperiences(newExperiences)
+                          }}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <Label>类型</Label>
+                          <Select value={exp.type} onValueChange={(value) => {
+                            const newExperiences = [...experiences]
+                            newExperiences[index].type = value
+                            setExperiences(newExperiences)
+                          }}>
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="project">项目经历</SelectItem>
+                              <SelectItem value="internship">实习经历</SelectItem>
+                              <SelectItem value="competition">竞赛经历</SelectItem>
+                              <SelectItem value="volunteer">志愿经历</SelectItem>
+                              <SelectItem value="other">其他</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        
+                        <div>
+                          <Label>标题</Label>
+                          <Input 
+                            value={exp.title} 
+                            onChange={(e) => {
+                              const newExperiences = [...experiences]
+                              newExperiences[index].title = e.target.value
+                              setExperiences(newExperiences)
+                            }}
+                            placeholder="请输入经历标题"
+                          />
+                        </div>
+                        
+                        <div className="md:col-span-2">
+                          <Label>描述</Label>
+                          <Textarea 
+                            value={exp.description} 
+                            onChange={(e) => {
+                              const newExperiences = [...experiences]
+                              newExperiences[index].description = e.target.value
+                              setExperiences(newExperiences)
+                            }}
+                            placeholder="请描述这段经历的详情"
+                            rows={3}
+                          />
+                        </div>
+                        
+                        <div>
+                          <Label>开始时间</Label>
+                          <Input 
+                            type="date" 
+                            value={exp.startDate} 
+                            onChange={(e) => {
+                              const newExperiences = [...experiences]
+                              newExperiences[index].startDate = e.target.value
+                              setExperiences(newExperiences)
+                            }}
+                          />
+                        </div>
+                        
+                        <div>
+                          <Label>结束时间</Label>
+                          <Input 
+                            type="date" 
+                            value={exp.endDate} 
+                            onChange={(e) => {
+                              const newExperiences = [...experiences]
+                              newExperiences[index].endDate = e.target.value
+                              setExperiences(newExperiences)
+                            }}
+                          />
+                        </div>
+                        
+                        <div className="md:col-span-2">
+                          <Label>涉及技能</Label>
+                          <Input 
+                            value={exp.skills.join(', ')} 
+                            onChange={(e) => {
+                              const newExperiences = [...experiences]
+                              newExperiences[index].skills = e.target.value.split(',').map(s => s.trim()).filter(s => s)
+                              setExperiences(newExperiences)
+                            }}
+                            placeholder="请用逗号分隔技能，如：React, Node.js, MongoDB"
+                          />
+                        </div>
+                        
+                        <div className="md:col-span-2">
+                          <Label>成果/收获</Label>
+                          <Textarea 
+                            value={exp.achievements} 
+                            onChange={(e) => {
+                              const newExperiences = [...experiences]
+                              newExperiences[index].achievements = e.target.value
+                              setExperiences(newExperiences)
+                            }}
+                            placeholder="请描述这段经历的成果或收获"
+                            rows={2}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </Card>
+                ))}
+              </div>
+
+              {/* 附件上传 */}
+              <div className="space-y-4 border-t pt-6">
+                <div className="flex justify-between items-center">
+                  <h3 className="text-lg font-semibold">附件上传</h3>
+                  <Button 
+                    type="button" 
+                    onClick={() => {
+                      // 这里可以打开文件选择对话框
+                      const input = document.createElement('input')
+                      input.type = 'file'
+                      input.multiple = true
+                      input.accept = '.pdf,.doc,.docx,.jpg,.jpeg,.png'
+                      input.onchange = (e: any) => {
+                        const files = Array.from(e.target.files)
+                        const newAttachments = files.map(file => ({
+                          file: file,
+                          type: 'resume',
+                          filename: (file as File).name,
+                          originalName: (file as File).name,
+                          description: ''
+                        }))
+                        setAttachments([...attachments, ...newAttachments])
+                      }
+                      input.click()
+                    }}
+                  >
+                    <Upload className="h-4 w-4 mr-1" />
+                    上传文件
+                  </Button>
+                </div>
+                
+                {attachments.length > 0 && (
+                  <div className="space-y-2">
+                    {attachments.map((attachment, index) => (
+                      <Card key={index} className="p-3">
+                        <div className="flex justify-between items-start">
+                          <div className="space-y-2 flex-1">
+                            <div className="flex items-center space-x-2">
+                              <span className="font-medium truncate">{attachment.filename}</span>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => {
+                                  const newAttachments = attachments.filter((_, i) => i !== index)
+                                  setAttachments(newAttachments)
+                                }}
+                              >
+                                <X className="h-4 w-4" />
+                              </Button>
+                            </div>
+                            
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                              <div>
+                                <Label className="text-sm">文件类型</Label>
+                                <Select value={attachment.type} onValueChange={(value) => {
+                                  const newAttachments = [...attachments]
+                                  newAttachments[index].type = value
+                                  setAttachments(newAttachments)
+                                }}>
+                                  <SelectTrigger>
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="resume">简历</SelectItem>
+                                    <SelectItem value="certificate">证书</SelectItem>
+                                    <SelectItem value="transcript">成绩单</SelectItem>
+                                    <SelectItem value="portfolio">作品集</SelectItem>
+                                    <SelectItem value="other">其他</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              
+                              <div>
+                                <Label className="text-sm">文件描述</Label>
+                                <Input 
+                                  value={attachment.description} 
+                                  onChange={(e) => {
+                                    const newAttachments = [...attachments]
+                                    newAttachments[index].description = e.target.value
+                                    setAttachments(newAttachments)
+                                  }}
+                                  placeholder="请输入文件描述"
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </Card>
+                    ))}
+                  </div>
+                )}
+                
+                <p className="text-sm text-gray-500">
+                  支持的文件格式：PDF, DOC, DOCX, JPG, PNG。单个文件不超过10MB。
+                </p>
               </div>
 
               <div className="flex justify-end gap-4 pt-6 border-t">
                 <Button type="button" variant="outline" onClick={() => router.back()}>
                   取消
                 </Button>
-                <Button type="submit" disabled={isSubmitting}>
-                  {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  {isSubmitting ? '提交中...' : '提交申请'}
+                <Button 
+                  type="submit" 
+                  disabled={isSubmitting || createApplicationMutation.isPending}
+                >
+                  {(isSubmitting || createApplicationMutation.isPending) && (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  )}
+                  {isSubmitting || createApplicationMutation.isPending ? '提交中...' : '提交申请'}
                 </Button>
               </div>
             </form>
           </Form>
         </CardContent>
       </Card>
-    </CandidateLayout>
+    </div>
   )
 }

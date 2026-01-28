@@ -139,7 +139,7 @@ export default function NewRecruitmentBatchPage() {
                     <SelectValue placeholder="请选择社团" />
                   </SelectTrigger>
                   <SelectContent>
-                    {clubs.map((club) => (
+                    {clubs.map((club: Club) => (
                       <SelectItem key={club.id} value={club.id}>
                         {club.name} {/* Assuming Club type has a 'name' property */}
                       </SelectItem>
@@ -186,7 +186,7 @@ export default function NewRecruitmentBatchPage() {
                   {registrationFields.length === 0 ? (
                     <p className="text-gray-500">暂无可选注册字段。</p>
                   ) : (
-                    registrationFields.map((field) => (
+                    registrationFields.map((field: RegistrationField) => (
                       <div key={field.id} className="flex items-center">
                         <Checkbox
                           id={`field-${field.id}`}

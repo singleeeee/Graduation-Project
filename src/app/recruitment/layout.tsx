@@ -1,56 +1,42 @@
 'use client'
 
+import { usePathname } from 'next/navigation'
 import { useAppStore } from '@/store'
+import { useMenuItems } from '@/hooks/use-permissions'
 import { AuthGuard } from '@/components/auth/AuthGuard'
-import { CandidateDashboard } from '@/components/dashboard/CandidateDashboard'
+import { DashboardLayout } from '@/components/layout/DashboardLayout'
 
 interface RecruitmentLayoutProps {
   children: React.ReactNode
 }
 
 function RecruitmentDashboardWrapper({ children }: RecruitmentLayoutProps) {
-  const { user, logout } = useAppStore()
+  const { user, logout, isAdmin, isCandidate, isInterviewer } = useAppStore()
+  const pathname = usePathname()
+  const menuItems = useMenuItems(pathname)
   
-  const candidateMenuItems = [
-    {
-      title: '招新信息',
-      icon: '🎯',
-      href: '/recruitment',
-      current: true // 因为在recruitment页面下，这个菜单项总是当前项
-    },
-    {
-      title: '我的申请',
-      icon: '📝',
-      href: '/application',
-      current: false
-    },
-    {
-      title: '个人信息',
-      icon: '👤',
-      href: '/profile',
-      current: false
-    },
-    {
-      title: '面试安排',
-      icon: '📅',
-      href: '/interviews',
-      current: false
-    },
-    {
-      title: '申请记录',
-      icon: '📋',
-      href: '/history',
-      current: false
-    }
-  ]
+  // 根据用户角色确定主题类型
+  const getTheme = () => {
+    if (isAdmin()) return 'admin'
+    if (isInterviewer()) return 'admin' // 面试官也使用admin主题
+    return 'candidate'
+  }
+  
+  // 根据用户角色确定标题
+  const getTitle = () => {
+    return '招新信息'
+  }
 
   return (
-    <CandidateDashboard 
-      user={user} 
+    <DashboardLayout
+      user={user}
       logout={logout}
-      overrideContent={children}
-      menuItems={candidateMenuItems}
-    />
+      menuItems={menuItems}
+      title={getTitle()}
+      theme={getTheme()}
+    >
+      {children}
+    </DashboardLayout>
   )
 }
 

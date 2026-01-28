@@ -31,6 +31,7 @@ import { AlertCircle, MoreHorizontal, CalendarIcon, Clock, User, Trash2, Edit, E
 import { useRecruitment, useUpdateRecruitmentStatus, useDeleteRecruitment, useClubsForSelection, useRegistrationFieldsForSelection } from '@/hooks/use-recruitment'
 import { usersApi } from '@/lib/api'
 import { RecruitmentStatus } from '@/lib/api/recruitment/types'
+import type { Club, RegistrationField } from '@/lib/api'
 import { FormPreview } from '@/components/recruitment/FormPreview'
 
 // 招新状态配置
@@ -54,7 +55,7 @@ export default function RecruitmentDetailPage() {
   const { data: allFields } = useRegistrationFieldsForSelection()
 
   // 获取当前社团信息
-  const currentClub = clubs?.find(club => club.id === recruitment?.clubId)
+  const currentClub = clubs?.find((club: Club) => club.id === recruitment?.clubId)
   
   // 获取管理员信息
   const { data: adminUser } = useQuery({
@@ -74,7 +75,7 @@ export default function RecruitmentDetailPage() {
   })
 
   // 筛选出招新批次所需字段的详细信息
-  const requiredFieldsDetails = allFields?.filter(field => 
+  const requiredFieldsDetails = allFields?.filter((field: RegistrationField) =>
     recruitment?.requiredFields?.includes(field.id)
   )
 

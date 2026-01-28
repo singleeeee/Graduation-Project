@@ -1,41 +1,48 @@
-import React from 'react'
-import { GraduationCap } from 'lucide-react'
-import Link from 'next/link'
-import { Button } from '@/components/ui/button'
+'use client'
 
-export default function ApplicationsLayout({
-  children,
-}: {
+import { usePathname } from 'next/navigation'
+import { useAppStore } from '@/store'
+import { useMenuItems } from '@/hooks/use-permissions'
+import { AuthGuard } from '@/components/auth/AuthGuard'
+import { DashboardLayout } from '@/components/layout/DashboardLayout'
+
+interface ApplicationsLayoutProps {
   children: React.ReactNode
-}) {
+}
+
+function ApplicationsLayoutWrapper({ children }: ApplicationsLayoutProps) {
+  const { user, logout, isAdmin } = useAppStore()
+  const pathname = usePathname()
+  const menuItems = useMenuItems(pathname)
+  
+  // 根据用户角色确定主题
+  const theme = isAdmin() ? 'admin' : 'candidate'
+  
+  // 设置页面标题
+  const getTitle = () => {
+    if (pathname === '/applications/new') return '提交申请'
+    return '我的申请'
+  }
+
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* 头部导航 */}
-      <header className="bg-white shadow-sm border-b">
-        <div className="container mx-auto px-4 h-16 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2">
-            <GraduationCap className="h-6 w-6 text-blue-600" />
-            <span className="font-bold text-xl text-gray-900">招新平台</span>
-          </Link>
-          
-          <nav className="flex items-center gap-4">
-            <Link href="/recruitment">
-              <Button variant="ghost">浏览招新</Button>
-            </Link>
-            <Link href="/applications">
-              <Button variant="ghost">我的申请</Button>
-            </Link>
-            <Link href="/profile">
-              <Button variant="outline">个人中心</Button>
-            </Link>
-          </nav>
-        </div>
-      </header>
-      
-      {/* 主内容 */}
-      <main>
+    <DashboardLayout
+      user={user}
+      logout={logout}
+      menuItems={menuItems}
+      title={getTitle()}
+      theme={theme}
+    >
+      {children}
+    </DashboardLayout>
+  )
+}
+
+export default function ApplicationsLayout({ children }: ApplicationsLayoutProps) {
+  return (
+    <AuthGuard requireAuth>
+      <ApplicationsLayoutWrapper>
         {children}
-      </main>
-    </div>
+      </ApplicationsLayoutWrapper>
+    </AuthGuard>
   )
 }

@@ -114,22 +114,51 @@ export function useCreateRecruitmentBatch() {
 export function useClubsForSelection() {
   return useQuery({
     queryKey: ['clubsForSelection'],
-    queryFn: () => {
-      // TODO: 实现社团选择列表接口
-      return []
+    queryFn: async () => {
+      try {
+        const { clubsApi } = require('@/lib/api')
+        // 获取所有活跃的社团，用于下拉选择
+        const result = await clubsApi.getClubs({ isActive: true, limit: 100 })
+        console.log('Clubs API result:', result)
+        return result
+      } catch (error) {
+        console.error('Failed to fetch clubs:', error)
+        return { data: [] }
+      }
     },
-    select: (data) => data?.data || []
+    select: (data) => {
+      console.log('Clubs selection data:', data)
+      return data?.data || []
+    }
   })
 }
 
 export function useRegistrationFieldsForSelection() {
   return useQuery({
     queryKey: ['registrationFieldsForSelection'],
-    queryFn: () => {
-      // TODO: 实现注册字段选择列表接口
-      return []
+    queryFn: async () => {
+      try {
+        const { registrationFieldsApi } = require('@/lib/api')
+        // 获取所有活跃的注册字段，用于表单构建
+        const result = await registrationFieldsApi.getActiveFields()
+        console.log('Registration fields API result:', result)
+        return result
+      } catch (error) {
+        console.error('Failed to fetch registration fields:', error)
+        return []
+      }
     },
-    select: (data) => data?.data || []
+    select: (data) => {
+      console.log('Registration fields selection data:', data)
+      // 处理不同的响应格式
+      if (Array.isArray(data?.data)) {
+        return data.data
+      }
+      if (Array.isArray(data)) {
+        return data
+      }
+      return []
+    }
   })
 }
 

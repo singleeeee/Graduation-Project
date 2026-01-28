@@ -54,6 +54,15 @@ export async function createRecruitmentBatch(
   return response
 }
 
+// 更新招新批次（管理员权限）
+export async function updateRecruitmentBatch(
+  id: string,
+  data: CreateRecruitmentBatchRequest
+): Promise<ApiResponse<RecruitmentBatch>> {
+  const response = await axiosService.put(`/recruitment/${id}`, data)
+  return response
+}
+
 
 export default {
   // 管理接口
@@ -62,6 +71,7 @@ export default {
   updateRecruitmentStatus,
   deleteRecruitment,
   createRecruitmentBatch,
+  updateRecruitmentBatch,
   // 公开接口
   getPublicRecruitments
 }
