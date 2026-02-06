@@ -327,9 +327,12 @@ export function DynamicRegistrationForm({ onSubmit, isSubmitting = false }: Dyna
     }
   }, [error, toast])
 
-  // 按fieldOrder排序字段
+  // 按fieldOrder排序字段，并过滤出isForRegister为true的字段
   const sortedFields = React.useMemo(() => {
-    return [...dynamicFields].sort((a, b) => a.fieldOrder - b.fieldOrder)
+    const fieldsArray = Array.isArray(dynamicFields) ? dynamicFields : (dynamicFields?.data || [])
+    return [...fieldsArray]
+      .filter(field => field.isForRegister)
+      .sort((a, b) => a.fieldOrder - b.fieldOrder)
   }, [dynamicFields])
 
   // 创建动态验证schema

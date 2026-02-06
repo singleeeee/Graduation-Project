@@ -1,6 +1,10 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { recruitmentApi } from '@/lib/api'
-import type { RecruitmentQueryParams, UpdateRecruitmentStatusRequest, CreateRecruitmentBatchRequest } from '@/lib/api/recruitment/types'
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { recruitmentApi } from "@/lib/api";
+import type {
+  RecruitmentQueryParams,
+  UpdateRecruitmentStatusRequest,
+  CreateRecruitmentBatchRequest,
+} from "@/lib/api/recruitment/types";
 
 /**
  * 候选人和公开可访问的招新相关Hook
@@ -8,21 +12,21 @@ import type { RecruitmentQueryParams, UpdateRecruitmentStatusRequest, CreateRecr
 
 export function usePublicRecruitments(params?: RecruitmentQueryParams) {
   return useQuery({
-    queryKey: ['publicRecruitments', params],
+    queryKey: ["publicRecruitments", params],
     queryFn: () => recruitmentApi.getPublicRecruitments(params),
     staleTime: 2 * 60 * 1000, // 2分钟缓存
-    select: (data) => data.data
-  })
+    select: (data) => data.data,
+  });
 }
 
 export function usePublicRecruitment(id: string) {
   return useQuery({
-    queryKey: ['publicRecruitment', id],
+    queryKey: ["publicRecruitment", id],
     queryFn: () => recruitmentApi.getRecruitment(id),
     enabled: !!id,
     staleTime: 5 * 60 * 1000, // 5分钟缓存
-    select: (data) => data.data
-  })
+    select: (data) => data.data,
+  });
 }
 
 /**
@@ -31,21 +35,21 @@ export function usePublicRecruitment(id: string) {
 
 export function useRecruitments(params?: RecruitmentQueryParams) {
   return useQuery({
-    queryKey: ['recruitments', params],
+    queryKey: ["recruitments", params?.search, params?.status, params?.page, params?.limit],
     queryFn: () => recruitmentApi.getRecruitments(params),
     staleTime: 2 * 60 * 1000, // 2分钟缓存
-    select: (data) => data.data
-  })
+    select: (data) => data.data,
+  });
 }
 
 export function useRecruitment(id: string) {
   return useQuery({
-    queryKey: ['recruitment', id],
+    queryKey: ["recruitment", id],
     queryFn: () => recruitmentApi.getRecruitment(id),
     enabled: !!id,
     staleTime: 5 * 60 * 1000, // 5分钟缓存
-    select: (data) => data.data
-  })
+    select: (data) => data.data,
+  });
 }
 
 /**
@@ -53,17 +57,17 @@ export function useRecruitment(id: string) {
  */
 export function useRecruitmentStats() {
   return useQuery({
-    queryKey: ['recruitmentStats'],
+    queryKey: ["recruitmentStats"],
     queryFn: async () => {
       // TODO: 实现统计数据接口
       return {
         activeClubs: 50,
         totalRecruitments: 200,
         totalApplications: 5000,
-        acceptanceRate: 65
-      }
-    }
-  })
+        acceptanceRate: 65,
+      };
+    },
+  });
 }
 
 /**
@@ -71,95 +75,103 @@ export function useRecruitmentStats() {
  */
 
 export function useUpdateRecruitmentStatus() {
-  const queryClient = useQueryClient()
+  const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ id, data }: { id: string; data: UpdateRecruitmentStatusRequest }) =>
-      recruitmentApi.updateRecruitmentStatus(id, data),
+    mutationFn: ({
+      id,
+      data,
+    }: {
+      id: string;
+      data: UpdateRecruitmentStatusRequest;
+    }) => recruitmentApi.updateRecruitmentStatus(id, data),
     onSuccess: (data) => {
       // 状态更新后刷新相关查询
-      queryClient.invalidateQueries({ queryKey: ['recruitments'] })
-      queryClient.invalidateQueries({ queryKey: ['recruitment', data.data?.id] })
+      queryClient.invalidateQueries({ queryKey: ["recruitments"] });
+      queryClient.invalidateQueries({
+        queryKey: ["recruitment", data.data?.id],
+      });
     },
-  })
+  });
 }
 
 export function useDeleteRecruitment() {
-  const queryClient = useQueryClient()
+  const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (id: string) => 
+    mutationFn: (id: string) =>
       recruitmentApi.deleteRecruitment(id).then(() => id),
     onSuccess: () => {
       // 删除成功后刷新招新列表
-      queryClient.invalidateQueries({ queryKey: ['recruitments'] })
+      queryClient.invalidateQueries({ queryKey: ["recruitments"] });
     },
-  })
+  });
 }
 
 export function useCreateRecruitmentBatch() {
-  const queryClient = useQueryClient()
+  const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: (data: CreateRecruitmentBatchRequest) =>
       recruitmentApi.createRecruitmentBatch(data),
     onSuccess: () => {
       // 创建成功后刷新招新列表
-      queryClient.invalidateQueries({ queryKey: ['recruitments'] })
+      queryClient.invalidateQueries({ queryKey: ["recruitments"] });
     },
-  })
+  });
 }
 
 // 管理员使用的Hook - 添加缺失的导出
 export function useClubsForSelection() {
   return useQuery({
-    queryKey: ['clubsForSelection'],
+    queryKey: ["clubsForSelection"],
     queryFn: async () => {
       try {
-        const { clubsApi } = require('@/lib/api')
+        const { clubsApi } = require("@/lib/api");
         // 获取所有活跃的社团，用于下拉选择
-        const result = await clubsApi.getClubs({ isActive: true, limit: 100 })
-        console.log('Clubs API result:', result)
-        return result
+        const result = await clubsApi.getClubs({ isActive: true, limit: 100 });
+        console.log("Clubs API result:", result);
+        return result;
       } catch (error) {
-        console.error('Failed to fetch clubs:', error)
-        return { data: [] }
+        console.error("Failed to fetch clubs:", error);
+        return { data: [] };
       }
     },
     select: (data) => {
-      console.log('Clubs selection data:', data)
-      return data?.data || []
-    }
-  })
+      console.log("Clubs selection data:", data);
+      return data?.data || [];
+    },
+  });
 }
 
 export function useRegistrationFieldsForSelection() {
   return useQuery({
-    queryKey: ['registrationFieldsForSelection'],
+    queryKey: ["registrationFieldsForSelection"],
     queryFn: async () => {
       try {
-        const { registrationFieldsApi } = require('@/lib/api')
+        const { registrationFieldsApi } = require("@/lib/api");
         // 获取所有活跃的注册字段，用于表单构建
-        const result = await registrationFieldsApi.getActiveFields()
-        console.log('Registration fields API result:', result)
-        return result
+        const result = await registrationFieldsApi.getActiveFields();
+        console.log("Registration fields API result:", result);
+        return result;
       } catch (error) {
-        console.error('Failed to fetch registration fields:', error)
-        return []
+        console.error("Failed to fetch registration fields:", error);
+        return [];
       }
     },
     select: (data) => {
-      console.log('Registration fields selection data:', data)
+      console.log("Registration fields selection data:", data);
       // 处理不同的响应格式
+      let fieldsArray: any[] = [];
       if (Array.isArray(data?.data)) {
-        return data.data
+        fieldsArray = data.data;
+      } else if (Array.isArray(data)) {
+        fieldsArray = data;
       }
-      if (Array.isArray(data)) {
-        return data
-      }
-      return []
-    }
-  })
+      // 只返回isForRecruitment为true的字段
+      return fieldsArray.filter((field) => field.isForRecruitment);
+    },
+  });
 }
 
 /**
@@ -167,23 +179,24 @@ export function useRegistrationFieldsForSelection() {
  */
 export function useActiveRegistrationFields() {
   return useQuery({
-    queryKey: ['registrationFields', 'active'],
+    queryKey: ["registrationFields", "active"],
     queryFn: () => {
-      const { registrationFieldsApi } = require('@/lib/api')
-      return registrationFieldsApi.getActiveFields()
+      const { registrationFieldsApi } = require("@/lib/api");
+      return registrationFieldsApi.getActiveFields();
     },
     select: (data) => {
       // 处理不同的响应格式
+      let fieldsArray: any[] = [];
       if (Array.isArray(data?.data)) {
-        return data.data
+        fieldsArray = data.data;
+      } else if (Array.isArray(data)) {
+        fieldsArray = data;
       }
-      if (Array.isArray(data)) {
-        return data
-      }
-      return []
+      // 只返回isForRecruitment为true的字段，因为这个钩子用于申请表单
+      return fieldsArray.filter((field) => field.isForRecruitment);
     },
     staleTime: 5 * 60 * 1000, // 5分钟缓存
-  })
+  });
 }
 
 export default {
@@ -197,5 +210,5 @@ export default {
   useActiveRegistrationFields,
   useUpdateRecruitmentStatus,
   useDeleteRecruitment,
-  useCreateRecruitmentBatch
-}
+  useCreateRecruitmentBatch,
+};

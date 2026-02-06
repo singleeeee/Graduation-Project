@@ -1,14 +1,20 @@
-"use client"
+"use client";
 
-import React, { useState } from 'react'
-import Link from 'next/link'
-import { useRouter } from 'next/navigation'
-import { toast } from 'sonner'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { Input } from '@/components/ui/input'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import React, { useState, useEffect, useCallback } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -16,13 +22,13 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from '@/components/ui/table'
+} from "@/components/ui/table";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
+} from "@/components/ui/dropdown-menu";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -32,16 +38,23 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from '@/components/ui/alert-dialog'
-import { useRecruitments, useUpdateRecruitmentStatus, useDeleteRecruitment } from '@/hooks/use-recruitment'
-import { RecruitmentStatus, RecruitmentBatch } from '@/lib/api/recruitment/types'
-import { usePermissions } from '@/hooks/use-permissions'
-import { 
-  Plus, 
-  Search, 
-  MoreHorizontal, 
-  Edit, 
-  Trash2, 
+} from "@/components/ui/alert-dialog";
+import {
+  useRecruitments,
+  useUpdateRecruitmentStatus,
+  useDeleteRecruitment,
+} from "@/hooks/use-recruitment";
+import {
+  RecruitmentStatus,
+  RecruitmentBatch,
+} from "@/lib/api/recruitment/types";
+import { usePermissions } from "@/hooks/use-permissions";
+import {
+  Plus,
+  Search,
+  MoreHorizontal,
+  Edit,
+  Trash2,
   Eye,
   CheckCircle,
   XCircle,
@@ -49,98 +62,157 @@ import {
   AlertCircle,
   Pause,
   Archive,
-  type LucideIcon
-} from 'lucide-react'
+  type LucideIcon,
+} from "lucide-react";
 
 export default function RecruitmentListPage() {
-  console.log("RecruitmentListPage: Component rendering")
-  const router = useRouter()
-  const { hasPermission } = usePermissions()
-  const [searchTerm, setSearchTerm] = useState('')
-  const [statusFilter, setStatusFilter] = useState<RecruitmentStatus | 'all'>('all')
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
-  const [selectedRecruitmentId, setSelectedRecruitmentId] = useState<string | null>(null)
+  console.log("RecruitmentListPage: Component rendering");
+  const router = useRouter();
+  const { hasPermission } = usePermissions();
+  const [searchTerm, setSearchTerm] = useState("");
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState<RecruitmentStatus | "all">(
+    "all",
+  );
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [selectedRecruitmentId, setSelectedRecruitmentId] = useState<
+    string | null
+  >(null);
 
-  // 构建查询参数
-  const queryParams = {
-    search: searchTerm || undefined,
-    status: statusFilter !== 'all' ? statusFilter : undefined,
-    page: 1,
-    limit: 10
-  }
+  // 防抖处理搜索输入
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+    }, 300); // 300ms防抖
+
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [searchTerm]);
+
+  // 构建查询参数，使用useMemo缓存，避免每次渲染都创建新对象
+  const queryParams = React.useMemo(() => {
+    return {
+      search: debouncedSearchTerm || undefined,
+      status: statusFilter !== "all" ? statusFilter : undefined,
+      page: 1,
+      limit: 10,
+    };
+  }, [debouncedSearchTerm, statusFilter]);
 
   // 获取招新列表数据
-  console.log("RecruitmentListPage: Calling useRecruitments with params:", queryParams)
-  const { 
-    data: recruitmentsData, 
-    isLoading, 
-    error 
-  } = useRecruitments(queryParams)
-  console.log("RecruitmentListPage: useRecruitments returned data:", recruitmentsData, "isLoading:", isLoading, "error:", error)
-  
+  console.log(
+    "RecruitmentListPage: Calling useRecruitments with params:",
+    queryParams,
+  );
+  const {
+    data: recruitmentsData,
+    isLoading,
+    error,
+  } = useRecruitments(queryParams);
+  console.log(
+    "RecruitmentListPage: useRecruitments returned data:",
+    recruitmentsData,
+    "isLoading:",
+    isLoading,
+    "error:",
+    error,
+  );
+
   // 额外调试信息
-  console.log("RecruitmentListPage: Type of recruitmentsData:", typeof recruitmentsData)
-  console.log("RecruitmentListPage: recruitmentsData is Array:", Array.isArray(recruitmentsData))
-  if (recruitmentsData) {
-    console.log("RecruitmentListPage: recruitmentsData length:", recruitmentsData.length)
-    console.log("RecruitmentListPage: First item:", recruitmentsData[0])
+  console.log(
+    "RecruitmentListPage: Type of recruitmentsData:",
+    typeof recruitmentsData,
+  );
+  console.log(
+    "RecruitmentListPage: recruitmentsData is Array:",
+    Array.isArray(recruitmentsData),
+  );
+  if (recruitmentsData && Array.isArray(recruitmentsData)) {
+    console.log(
+      "RecruitmentListPage: recruitmentsData length:",
+      recruitmentsData.length,
+    );
+    console.log("RecruitmentListPage: First item:", recruitmentsData[0]);
   }
 
   // 状态变更 hooks
-  const updateStatusMutation = useUpdateRecruitmentStatus()
-  const deleteRecruitmentMutation = useDeleteRecruitment()
+  const updateStatusMutation = useUpdateRecruitmentStatus();
+  const deleteRecruitmentMutation = useDeleteRecruitment();
 
   // 状态标签颜色映射
   const getStatusBadge = (status: RecruitmentStatus) => {
-    const statusConfig: Record<RecruitmentStatus, { label: string; variant: "default" | "secondary" | "destructive" | "outline"; icon: LucideIcon }> = {
-      draft: { label: '草稿', variant: 'secondary' as const, icon: Clock },
-      published: { label: '已发布', variant: 'default' as const, icon: CheckCircle },
-      ongoing: { label: '进行中', variant: 'default' as const, icon: Clock },
-      finished: { label: '已结束', variant: 'outline' as const, icon: CheckCircle },
-      archived: { label: '已存档', variant: 'secondary' as const, icon: Archive }
-    }
-    
-    const config = statusConfig[status]
-    const Icon = config.icon
-    
+    const statusConfig: Record<
+      RecruitmentStatus,
+      {
+        label: string;
+        variant: "default" | "secondary" | "destructive" | "outline";
+        icon: LucideIcon;
+      }
+    > = {
+      draft: { label: "草稿", variant: "secondary" as const, icon: Clock },
+      published: {
+        label: "已发布",
+        variant: "default" as const,
+        icon: CheckCircle,
+      },
+      ongoing: { label: "进行中", variant: "default" as const, icon: Clock },
+      finished: {
+        label: "已结束",
+        variant: "outline" as const,
+        icon: CheckCircle,
+      },
+      archived: {
+        label: "已存档",
+        variant: "secondary" as const,
+        icon: Archive,
+      },
+    };
+
+    const config = statusConfig[status];
+    const Icon = config.icon;
+
     return (
       <Badge variant={config.variant} className="gap-1">
         <Icon className="h-3 w-3" />
         {config.label}
       </Badge>
-    )
-  }
+    );
+  };
 
   // 处理状态变更，添加成功/失败反馈
-  const handleStatusChange = async (id: string, newStatus: RecruitmentStatus) => {
+  const handleStatusChange = async (
+    id: string,
+    newStatus: RecruitmentStatus,
+  ) => {
     try {
-      await updateStatusMutation.mutateAsync({ 
-        id, 
-        data: { status: newStatus } 
-      })
-      toast.success(`状态更新成功！`)
+      await updateStatusMutation.mutateAsync({
+        id,
+        data: { status: newStatus },
+      });
+      toast.success(`状态更新成功！`);
     } catch (error) {
-      console.error('更新状态失败:', error)
-      const errorMessage = error instanceof Error ? error.message : '未知错误'
-      toast.error(`更新状态失败，请重试。 ${errorMessage}`)
+      console.error("更新状态失败:", error);
+      const errorMessage = error instanceof Error ? error.message : "未知错误";
+      toast.error(`更新状态失败，请重试。 ${errorMessage}`);
     }
-  }
+  };
 
   // 处理删除，添加成功/失败反馈
   const handleDelete = async () => {
-    if (!selectedRecruitmentId) return
-    
+    if (!selectedRecruitmentId) return;
+
     try {
-      await deleteRecruitmentMutation.mutateAsync(selectedRecruitmentId)
-      toast.success('删除成功！')
-      setDeleteDialogOpen(false)
-      setSelectedRecruitmentId(null)
+      await deleteRecruitmentMutation.mutateAsync(selectedRecruitmentId);
+      toast.success("删除成功！");
+      setDeleteDialogOpen(false);
+      setSelectedRecruitmentId(null);
     } catch (error) {
-      console.error('删除失败:', error)
-      const errorMessage = error instanceof Error ? error.message : '未知错误'
-      toast.error(`删除失败，请重试。 ${errorMessage}`)
+      console.error("删除失败:", error);
+      const errorMessage = error instanceof Error ? error.message : "未知错误";
+      toast.error(`删除失败，请重试。 ${errorMessage}`);
     }
-  }
+  };
 
   if (isLoading) {
     return (
@@ -150,7 +222,7 @@ export default function RecruitmentListPage() {
           <p className="mt-4 text-gray-600">加载中...</p>
         </div>
       </div>
-    )
+    );
   }
 
   if (error) {
@@ -164,35 +236,48 @@ export default function RecruitmentListPage() {
           </Button>
         </div>
       </div>
-    )
+    );
   }
 
   // 确保我们有一个数组
-  let recruitments: RecruitmentBatch[] = []
+  let recruitments: RecruitmentBatch[] = [];
   if (Array.isArray(recruitmentsData)) {
-    recruitments = recruitmentsData
-  } else if (recruitmentsData && typeof recruitmentsData === 'object') {
+    recruitments = recruitmentsData;
+  } else if (recruitmentsData && typeof recruitmentsData === "object") {
     // 如果数据是对象格式，尝试提取数组
-    const dataObj = recruitmentsData as any
+    const dataObj = recruitmentsData as any;
     if (dataObj.data && Array.isArray(dataObj.data)) {
-      recruitments = dataObj.data
+      recruitments = dataObj.data;
     } else {
-      recruitments = [recruitmentsData as RecruitmentBatch]
+      // 如果无法提取数组，则返回空数组，避免类型错误
+      recruitments = [];
     }
   }
-  console.log("RecruitmentListPage: Final processed recruitments:", recruitments)
+  console.log(
+    "RecruitmentListPage: Final processed recruitments:",
+    recruitments,
+  );
 
   return (
-    <div className="container mx-auto py-6 space-y-6">
+    <div className="mx-auto space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">招新管理</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
+            招新管理
+          </h1>
           <p className="mt-2 text-gray-600">管理所有招新项目和批次</p>
         </div>
 
-        {/* 创建按钮，仅在桌面端显示 */}
-        <div className="hidden sm:block">
-          <Button onClick={() => router.push('/admin/recruitment/new')}>
+        {/* 操作按钮组，仅在桌面端显示 */}
+        <div className="hidden sm:flex gap-2">
+          <Button
+            variant="secondary"
+            onClick={() => router.push("/admin/screening")}
+          >
+            <Eye className="mr-2 h-4 w-4" />
+            简历筛选
+          </Button>
+          <Button onClick={() => router.push("/admin/recruitment/new")}>
             <Plus className="mr-2 h-4 w-4" />
             创建招新
           </Button>
@@ -213,7 +298,12 @@ export default function RecruitmentListPage() {
             </div>
 
             <div className="w-full sm:w-48">
-              <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value as RecruitmentStatus | 'all')}>
+              <Select
+                value={statusFilter}
+                onValueChange={(value) =>
+                  setStatusFilter(value as RecruitmentStatus | "all")
+                }
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="状态筛选" />
                 </SelectTrigger>
@@ -235,8 +325,12 @@ export default function RecruitmentListPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-[300px]">标题</TableHead>
-                  <TableHead className="hidden sm:table-cell">创建时间</TableHead>
-                  <TableHead className="hidden md:table-cell">截止时间</TableHead>
+                  <TableHead className="hidden sm:table-cell">
+                    创建时间
+                  </TableHead>
+                  <TableHead className="hidden md:table-cell">
+                    截止时间
+                  </TableHead>
                   <TableHead>状态</TableHead>
                   <TableHead className="text-right">操作</TableHead>
                 </TableRow>
@@ -253,7 +347,10 @@ export default function RecruitmentListPage() {
                     <TableRow key={recruitment.id}>
                       <TableCell className="font-medium">
                         <div>
-                          <Link href={`/admin/recruitment/${recruitment.id}`} className="text-blue-600 hover:underline">
+                          <Link
+                            href={`/admin/recruitment/${recruitment.id}`}
+                            className="text-blue-600 hover:underline"
+                          >
                             {recruitment.title}
                           </Link>
                           <p className="text-xs text-gray-500 line-clamp-2 mt-1">
@@ -263,12 +360,29 @@ export default function RecruitmentListPage() {
                       </TableCell>
                       <TableCell className="hidden sm:table-cell">
                         <div className="text-sm text-gray-500">
-                          {recruitment.createdAt ? new Date(recruitment.createdAt).toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' }) : 'N/A'}
+                          {recruitment.createdAt
+                            ? new Date(
+                                recruitment.createdAt,
+                              ).toLocaleDateString("zh-CN", {
+                                year: "numeric",
+                                month: "long",
+                                day: "numeric",
+                              })
+                            : "N/A"}
                         </div>
                       </TableCell>
                       <TableCell className="hidden md:table-cell">
                         <div className="text-sm text-gray-500">
-                          {recruitment.endTime ? new Date(recruitment.endTime).toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' }) : 'N/A'}
+                          {recruitment.endTime
+                            ? new Date(recruitment.endTime).toLocaleDateString(
+                                "zh-CN",
+                                {
+                                  year: "numeric",
+                                  month: "long",
+                                  day: "numeric",
+                                },
+                              )
+                            : "N/A"}
                         </div>
                       </TableCell>
                       <TableCell>
@@ -283,19 +397,31 @@ export default function RecruitmentListPage() {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => router.push(`/admin/recruitment/${recruitment.id}`)}>
+                            <DropdownMenuItem
+                              onClick={() =>
+                                router.push(
+                                  `/admin/recruitment/${recruitment.id}`,
+                                )
+                              }
+                            >
                               <Eye className="mr-2 h-4 w-4" />
                               查看详情
                             </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => router.push(`/admin/recruitment/${recruitment.id}/edit`)}>
+                            <DropdownMenuItem
+                              onClick={() =>
+                                router.push(
+                                  `/admin/recruitment/${recruitment.id}/edit`,
+                                )
+                              }
+                            >
                               <Edit className="mr-2 h-4 w-4" />
                               编辑
                             </DropdownMenuItem>
                             <DropdownMenuItem
                               className="text-red-600 focus:text-red-600"
                               onClick={() => {
-                                setSelectedRecruitmentId(recruitment.id)
-                                setDeleteDialogOpen(true)
+                                setSelectedRecruitmentId(recruitment.id);
+                                setDeleteDialogOpen(true);
                               }}
                             >
                               <Trash2 className="mr-2 h-4 w-4" />
@@ -313,7 +439,10 @@ export default function RecruitmentListPage() {
 
           {/* 移动端创建按钮 */}
           <div className="sm:hidden mt-4">
-            <Button onClick={() => router.push('/admin/recruitment/new')} className="w-full">
+            <Button
+              onClick={() => router.push("/admin/recruitment/new")}
+              className="w-full"
+            >
               <Plus className="mr-2 h-4 w-4" />
               创建招新
             </Button>
@@ -332,12 +461,15 @@ export default function RecruitmentListPage() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>取消</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} className="bg-red-600 hover:bg-red-700">
+            <AlertDialogAction
+              onClick={handleDelete}
+              className="bg-red-600 hover:bg-red-700"
+            >
               删除
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
     </div>
-  )
+  );
 }

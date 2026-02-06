@@ -3,6 +3,9 @@ import { Inter } from 'next/font/google'
 import './globals.css'
 import { QueryProvider } from '@/lib/query-client'
 import { AuthGuard } from '@/components/auth/AuthGuard'
+import { ErrorProvider } from '@/components/providers/error-provider'
+import { Toaster } from '@/components/ui/toaster'
+import { Toaster as SonnerToaster } from 'sonner'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -20,9 +23,14 @@ export default function RootLayout({
     <html lang="zh-CN">
       <body className={inter.className}>
         <QueryProvider>
-          <AuthGuard>
-            {children}
-          </AuthGuard>
+          <ErrorProvider>
+            <AuthGuard>
+              {children}
+            </AuthGuard>
+            {/* 支持两种 toast 系统 */}
+            <Toaster />
+            <SonnerToaster position="top-right" />
+          </ErrorProvider>
         </QueryProvider>
       </body>
     </html>

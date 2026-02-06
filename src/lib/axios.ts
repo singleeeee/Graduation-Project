@@ -1,4 +1,5 @@
 import axios, { AxiosError, AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios'
+import { globalErrorHandler } from './utils/error-handler'
 
 // 响应数据接口
 export interface ApiResponse<T = any> {
@@ -108,6 +109,9 @@ class AxiosService {
           }
         }
 
+        // 通知客户端显示错误提示
+        this.notifyClientError(error)
+        
         return Promise.reject(this.handleError(error))
       }
     )
@@ -186,6 +190,28 @@ class AxiosService {
     } else {
       // 请求配置出错
       return new Error(error.message || '请求配置错误')
+    }
+  }
+
+  private notifyClientError(error: any): void {
+    // 只在浏览器环境中发送事件
+    if (typeof window !== 'undefined') {
+      try {
+        const errorMessage = globalErrorHandler.extractErrorMessage(error)
+        
+        // 发送自定义事件到客户端
+        const errorEvent = new CustomEvent('api-error', {
+          detail: {
+            error,
+            message: errorMessage,
+            timestamp: Date.now()
+          }
+        })
+        
+        window.dispatchEvent(errorEvent)
+      } catch (e) {
+        console.error('Error dispatching client error event:', e)
+      }
     }
   }
 

@@ -7,7 +7,6 @@ import { useParams, useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Separator } from '@/components/ui/separator'
 
 export default function ApplicationDetailPage() {
   const params = useParams()
@@ -196,40 +195,42 @@ export default function ApplicationDetailPage() {
             {/* 申请人信息 */}
             <div>
               <h3 className="font-semibold mb-4 text-gray-900">申请人信息</h3>
-              <div className="space-y-3 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-gray-600">申请人ID:</span>
-                  <span className="font-mono text-xs">{application.applicantId}</span>
-                </div>
-                {application.education && (
-                  <>
+                <div className="space-y-3 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">申请人ID:</span>
+                    <span className="font-mono text-xs">{application.applicantId}</span>
+                  </div>
+                  {application.applicant && (
                     <div className="flex justify-between">
                       <span className="text-gray-600">姓名:</span>
-                      <span>{application.education.name || application.formData?.name || '-'}</span>
+                      <span>{application.applicant.name || '-'}</span>
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">学号:</span>
-                      <span>{application.education.studentId || application.formData?.studentId || '-'}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">电话:</span>
-                      <span>{application.education.phone || application.formData?.phone || '-'}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">学院:</span>
-                      <span>{application.education.college || application.formData?.college || '-'}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">专业:</span>
-                      <span>{application.education.major || application.formData?.major || '-'}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">年级:</span>
-                      <span>{application.education.grade || application.formData?.grade || '-'}</span>
-                    </div>
-                  </>
-                )}
-              </div>
+                  )}
+                  {application.education && (
+                    <>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">学号:</span>
+                        <span>{application.education.studentId || application.formData?.studentId || '-'}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">电话:</span>
+                        <span>{application.education.phone || application.formData?.phone || '-'}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">学院:</span>
+                        <span>{application.education.college || application.formData?.college || '-'}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">专业:</span>
+                        <span>{application.education.major || application.formData?.major || '-'}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">年级:</span>
+                        <span>{application.education.grade || application.formData?.grade || '-'}</span>
+                      </div>
+                    </>
+                  )}
+                </div>
             </div>
           </div>
         </CardContent>
@@ -260,6 +261,97 @@ export default function ApplicationDetailPage() {
         </>
       )}
 
+      {/* 经历和项目经验 */}
+      {application.experiences && application.experiences.length > 0 && (
+        <Card className="mb-8">
+          <CardHeader>
+            <CardTitle className="text-lg">项目经历</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-6">
+              {application.experiences.map((exp, index) => (
+                <div key={index} className="border-l-4 border-blue-500 pl-4">
+                  <div className="flex justify-between items-start mb-2">
+                    <h4 className="font-semibold text-gray-900">{exp.title}</h4>
+                    <span className="text-sm text-gray-500">
+                      {new Date(exp.startDate).toLocaleDateString('zh-CN')} - {new Date(exp.endDate).toLocaleDateString('zh-CN')}
+                    </span>
+                  </div>
+                  
+                  <div className="text-sm text-gray-600 mb-2">
+                    <span className="font-medium">类型:</span> {exp.type === 'project' ? '项目经历' : exp.type === 'internship' ? '实习经历' : '其他'}
+                  </div>
+                  
+                  {exp.skills && exp.skills.length > 0 && (
+                    <div className="mb-3">
+                      <span className="text-sm font-medium text-gray-600">技能标签: </span>
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {exp.skills.map((skill, skillIndex) => (
+                          <Badge key={skillIndex} variant="secondary" className="text-xs">
+                            {skill}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {exp.description && (
+                    <div className="mb-2">
+                      <span className="text-sm font-medium text-gray-600">描述: </span>
+                      <p className="text-sm text-gray-700 mt-1">{exp.description}</p>
+                    </div>
+                  )}
+                  
+                  {exp.achievements && (
+                    <div>
+                      <span className="text-sm font-medium text-gray-600">成果: </span>
+                      <p className="text-sm text-gray-700 mt-1">{exp.achievements}</p>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* 附件 */}
+      {application.attachments && application.attachments.length > 0 && (
+        <Card className="mb-8">
+          <CardHeader>
+            <CardTitle className="text-lg">附件</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {application.attachments.map((attachment, index) => (
+                <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                  <div className="flex items-center gap-3">
+                    <div className="text-blue-600">
+                      📄
+                    </div>
+                    <div>
+                      <div className="font-medium text-gray-900">
+                        {attachment.originalName}
+                      </div>
+                      <div className="text-sm text-gray-500">
+                        {attachment.description} • {attachment.type === 'resume' ? '简历' : '其他'}
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <Button variant="outline" size="sm" onClick={() => {
+                    // 这里可以添加下载或预览逻辑
+                    console.log('预览附件:', attachment)
+                  }}>
+                    预览
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* AI分析结果 */}
       {application.aiScore !== null && application.aiAnalysis && (
         <Card className="mb-8">
@@ -270,8 +362,8 @@ export default function ApplicationDetailPage() {
             <div className="space-y-4">
               <div className="flex items-center gap-4">
                 <span className="text-gray-600">综合评分:</span>
-                <Badge variant={application.aiScore >= 80 ? "default" : application.aiScore >= 60 ? "secondary" : "destructive"}>
-                  {application.aiScore}/100
+                <Badge variant={(application.aiScore || 0) >= 80 ? "default" : (application.aiScore || 0) >= 60 ? "secondary" : "destructive"}>
+                  {application.aiScore || '暂无评分'}
                 </Badge>
               </div>
               {application.aiAnalysis && (

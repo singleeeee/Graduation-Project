@@ -1,21 +1,37 @@
-'use client'
+"use client";
 
-import { useState, useEffect } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { useToast } from '@/hooks/use-toast'
-import { useAppStore } from '@/store'
-import { Search, Filter, Edit, Trash2, Eye, Users, Crown, GraduationCap, UserPlus } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Textarea } from '@/components/ui/textarea'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import { useState, useEffect } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useToast } from "@/hooks/use-toast";
+import { useAppStore } from "@/store";
+import {
+  Search,
+  Filter,
+  Edit,
+  Trash2,
+  Eye,
+  Users,
+  Crown,
+  GraduationCap,
+  UserPlus,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select'
+} from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -23,7 +39,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from '@/components/ui/table'
+} from "@/components/ui/table";
 import {
   Dialog,
   DialogContent,
@@ -33,210 +49,246 @@ import {
   DialogTitle,
   DialogTrigger,
   DialogClose,
-} from '@/components/ui/dialog'
-import { Badge } from '@/components/ui/badge'
-import { ProtectedRoute } from '@/components/auth/ProtectedRoute'
-import { usersApi, clubsApi, rolesApi } from '@/lib/api'
-import type { UserProfile, UserListParams, CreateClubAdminRequest } from '@/lib/api/users'
-import type { Club, ClubListResponse } from '@/lib/api/clubs'
+} from "@/components/ui/dialog";
+import { Badge } from "@/components/ui/badge";
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
+import { usersApi, clubsApi, rolesApi } from "@/lib/api";
+import type {
+  UserProfile,
+  UserListParams,
+  CreateClubAdminRequest,
+} from "@/lib/api/users";
+import type { Club, ClubListResponse } from "@/lib/api/clubs";
 
 interface UserFilters {
-  role: string
-  status: string
-  search: string
+  role: string;
+  status: string;
+  search: string;
 }
 
 interface UserManagementPageProps {
   user: {
-    id: string | null
-    name: string | null
-    email: string | null
-    role: string | {
-      id: string
-      name: string
-      code: string
-      level: number
-      permissions: string[]
-    } | null
-    permissions?: string[]
-  }
-  logout: () => void
+    id: string | null;
+    name: string | null;
+    email: string | null;
+    role:
+      | string
+      | {
+          id: string;
+          name: string;
+          code: string;
+          level: number;
+          permissions: string[];
+        }
+      | null;
+    permissions?: string[];
+  };
+  logout: () => void;
 }
 
 function UserManagementPageContent({ user, logout }: UserManagementPageProps) {
   const [filters, setFilters] = useState<UserFilters>({
-    role: 'all',
-    status: 'all',
-    search: '',
-  })
-  const [currentPage, setCurrentPage] = useState(1)
-  const [pageSize, setPageSize] = useState(10)
-  const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null)
-  const [isViewDialogOpen, setIsViewDialogOpen] = useState(false)
-  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
-  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
-  const [isCreateClubAdminDialogOpen, setIsCreateClubAdminDialogOpen] = useState(false)
+    role: "all",
+    status: "active",
+    search: "",
+  });
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
+  const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isCreateClubAdminDialogOpen, setIsCreateClubAdminDialogOpen] =
+    useState(false);
   const [editFormData, setEditFormData] = useState({
-    name: '',
-    email: '',
-    status: 'active' as 'active' | 'inactive' | 'suspended',
-    statusReason: '',
-    roleCode: '',
-    avatar: '',
-    profileFields: {} as { [key: string]: string }
-  })
+    name: "",
+    email: "",
+    status: "active" as "active" | "inactive" | "suspended",
+    statusReason: "",
+    roleCode: "",
+    avatar: "",
+    profileFields: {} as { [key: string]: string },
+  });
   const [createClubAdminForm, setCreateClubAdminForm] = useState({
-    email: '',
-    password: '',
-    name: '',
-    clubId: ''
-  })
-  
-  const queryClient = useQueryClient()
-  const { toast } = useToast()
+    email: "",
+    password: "",
+    name: "",
+    clubId: "",
+  });
+
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
 
   // 查询参数
   const queryParams: UserListParams = {
     page: currentPage,
     limit: pageSize,
-    role: filters.role === 'all' ? undefined : filters.role as any,
+    role: filters.role === "all" ? undefined : (filters.role as any),
+    status: filters.status === "all" ? undefined : (filters.status as any),
     search: filters.search || undefined,
-    sortBy: 'createdAt',
-    sortOrder: 'desc',
-  }
+    sortBy: "createdAt",
+    sortOrder: "desc",
+  };
 
   // 获取用户列表
-  const { data: usersData, isLoading: isUsersLoading, error: usersError } = useQuery({
-    queryKey: ['users', queryParams],
+  const {
+    data: usersData,
+    isLoading: isUsersLoading,
+    error: usersError,
+  } = useQuery({
+    queryKey: ["users", queryParams],
     queryFn: () => usersApi.getUsers(queryParams),
     enabled: true,
     staleTime: 0, // 禁用缓存，每次切换都重新获取数据
-  })
+  });
 
   // 获取社团列表
-  const { data: clubsData, isLoading: isClubsLoading, error: clubsError } = useQuery({
-    queryKey: ['clubs'],
+  const {
+    data: clubsData,
+    isLoading: isClubsLoading,
+    error: clubsError,
+  } = useQuery({
+    queryKey: ["clubs"],
     queryFn: () => clubsApi.getClubs({ limit: 100 }),
     enabled: isCreateClubAdminDialogOpen,
-  })
+  });
 
   // 获取角色列表
-  const { data: rolesData, isLoading: isRolesLoading, error: rolesError } = useQuery({
-    queryKey: ['roles'],
+  const {
+    data: rolesData,
+    isLoading: isRolesLoading,
+    error: rolesError,
+  } = useQuery({
+    queryKey: ["roles"],
     queryFn: async () => {
-      const response = await rolesApi.getRoles({ limit: 50 })
-      // rolesApi.getRoles 现在直接返回 Role[] 数组
-      return response
+      const response = await rolesApi.getRoles({ limit: 50 });
+      // 处理接口返回的数据格式，确保返回 Role[] 数组
+      if (response && typeof response === "object" && "data" in response) {
+        return response.data;
+      }
+      return response;
     },
     enabled: isEditDialogOpen, // 只在编辑对话框打开时加载角色数据
     staleTime: 5 * 60 * 1000, // 5分钟内不重新获取
-  })
+  });
 
   // 更新用户状态
   const updateStatusMutation = useMutation({
-    mutationFn: ({ id, status }: { id: string; status: 'active' | 'inactive' | 'suspended' }) =>
-      usersApi.updateUserStatus(id, status),
+    mutationFn: ({
+      id,
+      status,
+    }: {
+      id: string;
+      status: "active" | "inactive" | "suspended";
+    }) => usersApi.updateUserStatus(id, status),
     onSuccess: () => {
-      toast({ title: '成功', description: '用户状态更新成功' })
-      queryClient.invalidateQueries({ queryKey: ['users'] })
+      toast({ title: "成功", description: "用户状态更新成功" });
+      queryClient.invalidateQueries({ queryKey: ["users"] });
     },
     onError: (error: any) => {
-      toast({ 
-        title: '错误', 
-        description: error?.response?.data?.message || '更新用户状态失败',
-        variant: 'destructive'
-      })
+      toast({
+        title: "错误",
+        description: error?.response?.data?.message || "更新用户状态失败",
+        variant: "destructive",
+      });
     },
-  })
+  });
 
   // 编辑用户
   const editUserMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: any }) => usersApi.updateUser(id, data),
+    mutationFn: ({ id, data }: { id: string; data: any }) =>
+      usersApi.updateUser(id, data),
     onSuccess: () => {
-      toast({ title: '成功', description: '用户信息更新成功' })
-      queryClient.invalidateQueries({ queryKey: ['users'] })
-      setIsEditDialogOpen(false)
-      setSelectedUser(null)
+      toast({ title: "成功", description: "用户信息更新成功" });
+      queryClient.invalidateQueries({ queryKey: ["users"] });
+      setIsEditDialogOpen(false);
+      setSelectedUser(null);
     },
     onError: (error: any) => {
-      toast({ 
-        title: '错误', 
-        description: error?.response?.data?.message || '更新用户信息失败',
-        variant: 'destructive'
-      })
+      toast({
+        title: "错误",
+        description: error?.response?.data?.message || "更新用户信息失败",
+        variant: "destructive",
+      });
     },
-  })
+  });
 
   // 创建社团管理员账号
   const createClubAdminMutation = useMutation({
-    mutationFn: (data: CreateClubAdminRequest) => usersApi.createClubAdmin(data),
+    mutationFn: (data: CreateClubAdminRequest) =>
+      usersApi.createClubAdmin(data),
     onSuccess: () => {
-      toast({ title: '成功', description: '社团管理员账号创建成功' })
-      queryClient.invalidateQueries({ queryKey: ['users'] })
-      setIsCreateClubAdminDialogOpen(false)
+      toast({ title: "成功", description: "社团管理员账号创建成功" });
+      queryClient.invalidateQueries({ queryKey: ["users"] });
+      setIsCreateClubAdminDialogOpen(false);
       setCreateClubAdminForm({
-        email: '',
-        password: '',
-        name: '',
-        clubId: ''
-      })
+        email: "",
+        password: "",
+        name: "",
+        clubId: "",
+      });
     },
     onError: (error: any) => {
-      toast({ 
-        title: '错误', 
-        description: error?.response?.data?.message || '创建社团管理员账号失败',
-        variant: 'destructive'
-      })
+      toast({
+        title: "错误",
+        description: error?.response?.data?.message || "创建社团管理员账号失败",
+        variant: "destructive",
+      });
     },
-  })
+  });
 
   // 删除用户
   const deleteUserMutation = useMutation({
     mutationFn: (id: string) => usersApi.deleteUser(id),
     onSuccess: () => {
-      toast({ title: '成功', description: '用户删除成功' })
-      queryClient.invalidateQueries({ queryKey: ['users'] })
-      setIsDeleteDialogOpen(false)
-      setSelectedUser(null)
+      toast({ title: "成功", description: "用户删除成功" });
+      queryClient.invalidateQueries({ queryKey: ["users"] });
+      setIsDeleteDialogOpen(false);
+      setSelectedUser(null);
     },
     onError: (error: any) => {
-      toast({ 
-        title: '错误', 
-        description: error?.response?.data?.message || '删除用户失败',
-        variant: 'destructive'
-      })
+      toast({
+        title: "错误",
+        description: error?.response?.data?.message || "删除用户失败",
+        variant: "destructive",
+      });
     },
-  })
-
+  });
 
   const handleFilterChange = (key: keyof UserFilters, value: string) => {
-    setFilters(prev => ({ ...prev, [key]: value }))
-    setCurrentPage(1)
-  }
+    setFilters((prev) => ({ ...prev, [key]: value }));
+    setCurrentPage(1);
+  };
 
-  const handleStatusUpdate = (userId: string, status: 'active' | 'inactive' | 'suspended') => {
-    updateStatusMutation.mutate({ id: userId, status })
-  }
+  const handleStatusUpdate = (
+    userId: string,
+    status: "active" | "inactive" | "suspended",
+  ) => {
+    updateStatusMutation.mutate({ id: userId, status });
+  };
 
   const handleDeleteUser = () => {
     if (selectedUser) {
-      deleteUserMutation.mutate(selectedUser.id)
+      deleteUserMutation.mutate(selectedUser.id);
     }
-  }
+  };
 
   const handleOpenEditDialog = (user: UserProfile) => {
-    setSelectedUser(user)
+    setSelectedUser(user);
     setEditFormData({
-      name: user.name || '',
+      name: user.name || "",
       email: user.email,
       status: user.status,
-      statusReason: '',
-      roleCode: typeof user.role === 'object' && user.role?.code ? user.role.code : (user.role as string) || '',
-      avatar: user.avatar || '',
-      profileFields: user.profileFields || {}
-    })
-    setIsEditDialogOpen(true)
-  }
+      statusReason: "",
+      roleCode:
+        typeof user.role === "object" && user.role?.code
+          ? user.role.code
+          : (user.role as string) || "",
+      avatar: user.avatar || "",
+      profileFields: user.profileFields || {},
+    });
+    setIsEditDialogOpen(true);
+  };
 
   const handleEditSubmit = () => {
     if (selectedUser) {
@@ -244,104 +296,111 @@ function UserManagementPageContent({ user, logout }: UserManagementPageProps) {
       const requestData: any = {
         name: editFormData.name,
         status: editFormData.status,
-        statusReason: editFormData.statusReason || undefined
-      }
+        statusReason: editFormData.statusReason || undefined,
+      };
 
       // Only include email if it has changed and validate it
       if (editFormData.email && editFormData.email !== selectedUser.email) {
-        requestData.email = editFormData.email
+        requestData.email = editFormData.email;
       }
 
       // Include roleCode if it has changed and not for system_admin as per API rules
-      if (editFormData.roleCode && editFormData.roleCode !== 'system_admin') {
+      if (editFormData.roleCode && editFormData.roleCode !== "system_admin") {
         // Only include roleCode if it's different from current role
-        const currentRoleCode = typeof selectedUser.role === 'object' && selectedUser.role?.code 
-          ? selectedUser.role.code 
-          : selectedUser.role
+        const currentRoleCode =
+          typeof selectedUser.role === "object" && selectedUser.role?.code
+            ? selectedUser.role.code
+            : selectedUser.role;
         if (editFormData.roleCode !== currentRoleCode) {
-          requestData.roleCode = editFormData.roleCode
+          requestData.roleCode = editFormData.roleCode;
         }
       }
 
       // Include avatar if it has changed
       if (editFormData.avatar !== selectedUser.avatar) {
-        requestData.avatar = editFormData.avatar || undefined
+        requestData.avatar = editFormData.avatar || undefined;
       }
 
       // Include profileFields if they have changed
-      const currentProfileFields = selectedUser.profileFields || {}
-      const hasProfileFieldsChanged = 
-        JSON.stringify(editFormData.profileFields) !== JSON.stringify(currentProfileFields)
-      
-      if (hasProfileFieldsChanged && Object.keys(editFormData.profileFields).length > 0) {
-        requestData.profileFields = editFormData.profileFields
+      const currentProfileFields = selectedUser.profileFields || {};
+      const hasProfileFieldsChanged =
+        JSON.stringify(editFormData.profileFields) !==
+        JSON.stringify(currentProfileFields);
+
+      if (
+        hasProfileFieldsChanged &&
+        Object.keys(editFormData.profileFields).length > 0
+      ) {
+        requestData.profileFields = editFormData.profileFields;
       }
 
       editUserMutation.mutate({
         id: selectedUser.id,
-        data: requestData
-      })
+        data: requestData,
+      });
     }
-  }
+  };
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'active':
-        return 'bg-green-100 text-green-800'
-      case 'inactive':
-        return 'bg-gray-100 text-gray-800'
-      case 'suspended':
-        return 'bg-red-100 text-red-800'
+      case "active":
+        return "bg-green-100 text-green-800";
+      case "inactive":
+        return "bg-gray-100 text-gray-800";
+      case "suspended":
+        return "bg-red-100 text-red-800";
       default:
-        return 'bg-gray-100 text-gray-800'
+        return "bg-gray-100 text-gray-800";
     }
-  }
+  };
 
   const getRoleColor = (role: string | any) => {
     // 如果是对象，使用code属性
-    const roleCode = typeof role === 'object' && role?.code ? role.code : role
+    const roleCode = typeof role === "object" && role?.code ? role.code : role;
     switch (roleCode) {
-      case 'system_admin':
-        return 'bg-purple-100 text-purple-800'
-      case 'club_admin':
-        return 'bg-blue-100 text-blue-800'  
-      case 'admin':
-        return 'bg-purple-100 text-purple-800'
-      case 'candidate':
-        return 'bg-green-100 text-green-800'
-      case 'interviewer':
-        return 'bg-yellow-100 text-yellow-800'
+      case "system_admin":
+        return "bg-purple-100 text-purple-800";
+      case "club_admin":
+        return "bg-blue-100 text-blue-800";
+      case "admin":
+        return "bg-purple-100 text-purple-800";
+      case "candidate":
+        return "bg-green-100 text-green-800";
+      case "interviewer":
+        return "bg-yellow-100 text-yellow-800";
       default:
-        return 'bg-gray-100 text-gray-800'
+        return "bg-gray-100 text-gray-800";
     }
-  }
+  };
 
   const formatRole = (role: string | any) => {
     // 如果是对象，使用code属性或name属性
-    const roleCode = typeof role === 'object' && role ? (role.code || role.name || '') : role
+    const roleCode =
+      typeof role === "object" && role ? role.code || role.name || "" : role;
     switch (roleCode) {
-      case 'system_admin':
-      case 'admin':
-        return '超级管理员'
-      case 'club_admin':
-        return '社团管理员'
-      case 'candidate':
-        return '候选人' 
-      case 'interviewer':
-        return '面试官'
+      case "system_admin":
+      case "admin":
+        return "超级管理员";
+      case "club_admin":
+        return "社团管理员";
+      case "candidate":
+        return "候选人";
+      case "interviewer":
+        return "面试官";
       default:
-        return typeof role === 'object' && role?.name ? role.name : roleCode
+        return typeof role === "object" && role?.name ? role.name : roleCode;
     }
-  }
+  };
 
-  const totalPages = usersData ? Math.ceil(usersData.total / pageSize) : 0
+  const totalPages = usersData ? Math.ceil(usersData.total / pageSize) : 0;
 
   // 检查是否有任何关键的加载状态（只关心用户数据加载）
-  const isAnyLoading = isUsersLoading
-  
+  const isAnyLoading = isUsersLoading;
+
   // 检查关键错误（角色错误不阻止主页面显示）
-  const hasError = usersError || clubsError
-  const errorMessage = usersError?.message || clubsError?.message || '加载数据失败'
+  const hasError = usersError || clubsError;
+  const errorMessage =
+    usersError?.message || clubsError?.message || "加载数据失败";
 
   if (isAnyLoading) {
     return (
@@ -351,7 +410,7 @@ function UserManagementPageContent({ user, logout }: UserManagementPageProps) {
           <span>加载中...</span>
         </div>
       </div>
-    )
+    );
   }
 
   if (hasError) {
@@ -360,7 +419,7 @@ function UserManagementPageContent({ user, logout }: UserManagementPageProps) {
         <div className="text-red-500 mb-4">{errorMessage}</div>
         <Button onClick={() => window.location.reload()}>重新加载</Button>
       </div>
-    )
+    );
   }
 
   return (
@@ -392,14 +451,15 @@ function UserManagementPageContent({ user, logout }: UserManagementPageProps) {
             </div>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600">激活用户</p>
                 <p className="text-2xl font-bold">
-                  {usersData?.users?.filter(u => u.status === 'active').length || 0}
+                  {usersData?.users?.filter((u) => u.status === "active")
+                    .length || 0}
                 </p>
               </div>
               <div className="p-2 bg-green-100 rounded-lg">
@@ -415,9 +475,16 @@ function UserManagementPageContent({ user, logout }: UserManagementPageProps) {
               <div>
                 <p className="text-sm font-medium text-gray-600">管理员</p>
                 <p className="text-2xl font-bold">
-                  {usersData?.users?.filter(u => {
-                    const roleCode = typeof u.role === 'object' && u.role?.code ? u.role.code : u.role
-                    return roleCode === 'admin' || roleCode === 'system_admin' || roleCode === 'super_admin'
+                  {usersData?.users?.filter((u) => {
+                    const roleCode =
+                      typeof u.role === "object" && u.role?.code
+                        ? u.role.code
+                        : u.role;
+                    return (
+                      roleCode === "admin" ||
+                      roleCode === "system_admin" ||
+                      roleCode === "super_admin"
+                    );
                   }).length || 0}
                 </p>
               </div>
@@ -433,12 +500,15 @@ function UserManagementPageContent({ user, logout }: UserManagementPageProps) {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600">候选人</p>
-                  <p className="text-2xl font-bold">
-                    {usersData?.users?.filter(u => {
-                      const roleCode = typeof u.role === 'object' && u.role?.code ? u.role.code : u.role
-                      return roleCode === 'candidate'
-                    }).length || 0}
-                  </p>
+                <p className="text-2xl font-bold">
+                  {usersData?.users?.filter((u) => {
+                    const roleCode =
+                      typeof u.role === "object" && u.role?.code
+                        ? u.role.code
+                        : u.role;
+                    return roleCode === "candidate";
+                  }).length || 0}
+                </p>
               </div>
               <div className="p-2 bg-yellow-100 rounded-lg">
                 <GraduationCap className="h-5 w-5 text-yellow-600" />
@@ -462,14 +532,14 @@ function UserManagementPageContent({ user, logout }: UserManagementPageProps) {
                 <Input
                   placeholder="搜索用户名、邮箱、学号..."
                   value={filters.search}
-                  onChange={(e) => handleFilterChange('search', e.target.value)}
+                  onChange={(e) => handleFilterChange("search", e.target.value)}
                   className="pl-9"
                 />
               </div>
             </div>
             <Select
               value={filters.role}
-              onValueChange={(value) => handleFilterChange('role', value)}
+              onValueChange={(value) => handleFilterChange("role", value)}
             >
               <SelectTrigger className="w-[200px]">
                 <SelectValue placeholder="选择角色" />
@@ -483,7 +553,7 @@ function UserManagementPageContent({ user, logout }: UserManagementPageProps) {
             </Select>
             <Select
               value={filters.status}
-              onValueChange={(value) => handleFilterChange('status', value)}
+              onValueChange={(value) => handleFilterChange("status", value)}
             >
               <SelectTrigger className="w-[200px]">
                 <SelectValue placeholder="选择状态" />
@@ -504,7 +574,8 @@ function UserManagementPageContent({ user, logout }: UserManagementPageProps) {
         <CardHeader>
           <CardTitle>用户列表</CardTitle>
           <CardDescription>
-            共 {usersData?.total || 0} 个用户，第 {currentPage} 页，共 {totalPages} 页
+            共 {usersData?.total || 0} 个用户，第 {currentPage} 页，共{" "}
+            {totalPages} 页
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -514,6 +585,7 @@ function UserManagementPageContent({ user, logout }: UserManagementPageProps) {
                 <TableRow>
                   <TableHead>用户信息</TableHead>
                   <TableHead>角色</TableHead>
+                  <TableHead>状态</TableHead>
                   <TableHead>注册时间</TableHead>
                   <TableHead className="text-right">操作</TableHead>
                 </TableRow>
@@ -527,7 +599,10 @@ function UserManagementPageContent({ user, logout }: UserManagementPageProps) {
                   </TableRow>
                 ) : usersData && usersData?.users?.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center py-8 text-gray-500">
+                    <TableCell
+                      colSpan={5}
+                      className="text-center py-8 text-gray-500"
+                    >
                       暂无用户数据
                     </TableCell>
                   </TableRow>
@@ -537,21 +612,29 @@ function UserManagementPageContent({ user, logout }: UserManagementPageProps) {
                       <TableCell>
                         <div className="flex items-center space-x-3">
                           {user.avatar ? (
-                            <img 
-                              src={user.avatar} 
-                              alt={user.name || '用户头像'}
+                            <img
+                              src={user.avatar}
+                              alt={user.name || "用户头像"}
                               className="w-8 h-8 rounded-full object-cover"
                             />
                           ) : (
                             <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center text-gray-500 text-sm font-medium">
-                              {user.name?.charAt(0)?.toUpperCase() || user.email?.charAt(0)?.toUpperCase() || '?'}
+                              {user.name?.charAt(0)?.toUpperCase() ||
+                                user.email?.charAt(0)?.toUpperCase() ||
+                                "?"}
                             </div>
                           )}
                           <div>
-                            <div className="font-medium">{user.name || '未设置姓名'}</div>
-                            <div className="text-sm text-gray-500">{user.email}</div>
+                            <div className="font-medium">
+                              {user.name || "未设置姓名"}
+                            </div>
+                            <div className="text-sm text-gray-500">
+                              {user.email}
+                            </div>
                             {user.studentId && (
-                              <div className="text-xs text-gray-400">学号: {user.studentId}</div>
+                              <div className="text-xs text-gray-400">
+                                学号: {user.studentId}
+                              </div>
                             )}
                           </div>
                         </div>
@@ -561,8 +644,17 @@ function UserManagementPageContent({ user, logout }: UserManagementPageProps) {
                           {formatRole(user.role)}
                         </Badge>
                       </TableCell>
+                      <TableCell>
+                        <Badge className={getStatusColor(user.status)}>
+                          {user.status === "active"
+                            ? "激活"
+                            : user.status === "inactive"
+                              ? "未激活"
+                              : "已暂停"}
+                        </Badge>
+                      </TableCell>
                       <TableCell className="text-gray-600">
-                        {new Date(user.createdAt).toLocaleDateString('zh-CN')}
+                        {new Date(user.createdAt).toLocaleDateString("zh-CN")}
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end space-x-2">
@@ -570,8 +662,8 @@ function UserManagementPageContent({ user, logout }: UserManagementPageProps) {
                             variant="ghost"
                             size="sm"
                             onClick={() => {
-                              setSelectedUser(user)
-                              setIsViewDialogOpen(true)
+                              setSelectedUser(user);
+                              setIsViewDialogOpen(true);
                             }}
                           >
                             <Eye className="h-4 w-4" />
@@ -587,8 +679,8 @@ function UserManagementPageContent({ user, logout }: UserManagementPageProps) {
                             variant="ghost"
                             size="sm"
                             onClick={() => {
-                              setSelectedUser(user)
-                              setIsDeleteDialogOpen(true)
+                              setSelectedUser(user);
+                              setIsDeleteDialogOpen(true);
                             }}
                           >
                             <Trash2 className="h-4 w-4" />
@@ -606,47 +698,55 @@ function UserManagementPageContent({ user, logout }: UserManagementPageProps) {
           {totalPages > 1 && (
             <div className="flex items-center justify-between mt-4">
               <div className="text-sm text-gray-600">
-                显示 {(currentPage - 1) * pageSize + 1}-{Math.min(currentPage * pageSize, usersData?.total || 0)} 条，共 {usersData?.total || 0} 条
+                显示 {(currentPage - 1) * pageSize + 1}-
+                {Math.min(currentPage * pageSize, usersData?.total || 0)} 条，共{" "}
+                {usersData?.total || 0} 条
               </div>
               <div className="flex space-x-2">
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                  onClick={() =>
+                    setCurrentPage((prev) => Math.max(prev - 1, 1))
+                  }
                   disabled={currentPage === 1}
                 >
                   上一页
                 </Button>
                 <div className="flex items-center space-x-1">
                   {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                    let pageNum = currentPage
+                    let pageNum = currentPage;
                     if (totalPages > 5) {
                       if (currentPage <= 3) {
-                        pageNum = i + 1
+                        pageNum = i + 1;
                       } else if (currentPage >= totalPages - 2) {
-                        pageNum = totalPages - 4 + i
+                        pageNum = totalPages - 4 + i;
                       } else {
-                        pageNum = currentPage - 2 + i
+                        pageNum = currentPage - 2 + i;
                       }
                     } else {
-                      pageNum = i + 1
+                      pageNum = i + 1;
                     }
                     return (
                       <Button
                         key={pageNum}
-                        variant={pageNum === currentPage ? "default" : "outline"}
+                        variant={
+                          pageNum === currentPage ? "default" : "outline"
+                        }
                         size="sm"
                         onClick={() => setCurrentPage(pageNum)}
                       >
                         {pageNum}
                       </Button>
-                    )
+                    );
                   })}
                 </div>
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                  onClick={() =>
+                    setCurrentPage((prev) => Math.min(prev + 1, totalPages))
+                  }
                   disabled={currentPage === totalPages}
                 >
                   下一页
@@ -662,26 +762,28 @@ function UserManagementPageContent({ user, logout }: UserManagementPageProps) {
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>用户详情</DialogTitle>
-            <DialogDescription>
-              查看用户的详细信息
-            </DialogDescription>
+            <DialogDescription>查看用户的详细信息</DialogDescription>
           </DialogHeader>
           {selectedUser && (
             <div className="space-y-6">
               <div className="flex items-center space-x-4">
                 {selectedUser.avatar ? (
-                  <img 
-                    src={selectedUser.avatar} 
-                    alt={selectedUser.name || '用户头像'}
+                  <img
+                    src={selectedUser.avatar}
+                    alt={selectedUser.name || "用户头像"}
                     className="w-16 h-16 rounded-full object-cover"
                   />
                 ) : (
                   <div className="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center text-gray-500 text-xl font-medium">
-                    {selectedUser.name?.charAt(0)?.toUpperCase() || selectedUser.email?.charAt(0)?.toUpperCase() || '?'}
+                    {selectedUser.name?.charAt(0)?.toUpperCase() ||
+                      selectedUser.email?.charAt(0)?.toUpperCase() ||
+                      "?"}
                   </div>
                 )}
                 <div>
-                  <h3 className="text-lg font-semibold">{selectedUser.name || '未设置姓名'}</h3>
+                  <h3 className="text-lg font-semibold">
+                    {selectedUser.name || "未设置姓名"}
+                  </h3>
                   <p className="text-gray-600">{selectedUser.email}</p>
                   <div className="flex space-x-2 mt-2">
                     <Badge className={getRoleColor(selectedUser.role)}>
@@ -690,46 +792,64 @@ function UserManagementPageContent({ user, logout }: UserManagementPageProps) {
                   </div>
                 </div>
               </div>
-              
+
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="text-sm font-medium text-gray-600">用户ID</label>
+                  <label className="text-sm font-medium text-gray-600">
+                    用户ID
+                  </label>
                   <p className="mt-1 text-sm">{selectedUser.id}</p>
                 </div>
                 <div>
-                  <label className="text-sm font-medium text-gray-600">注册时间</label>
-                  <p className="mt-1 text-sm">{new Date(selectedUser.createdAt).toLocaleString('zh-CN')}</p>
+                  <label className="text-sm font-medium text-gray-600">
+                    注册时间
+                  </label>
+                  <p className="mt-1 text-sm">
+                    {new Date(selectedUser.createdAt).toLocaleString("zh-CN")}
+                  </p>
                 </div>
                 <div>
-                  <label className="text-sm font-medium text-gray-600">最后更新</label>
-                  <p className="mt-1 text-sm">{new Date(selectedUser.updatedAt).toLocaleString('zh-CN')}</p>
+                  <label className="text-sm font-medium text-gray-600">
+                    最后更新
+                  </label>
+                  <p className="mt-1 text-sm">
+                    {new Date(selectedUser.updatedAt).toLocaleString("zh-CN")}
+                  </p>
                 </div>
                 {selectedUser.studentId && (
                   <div>
-                    <label className="text-sm font-medium text-gray-600">学号</label>
+                    <label className="text-sm font-medium text-gray-600">
+                      学号
+                    </label>
                     <p className="mt-1 text-sm">{selectedUser.studentId}</p>
                   </div>
                 )}
                 {selectedUser.phone && (
                   <div>
-                    <label className="text-sm font-medium text-gray-600">手机号</label>
+                    <label className="text-sm font-medium text-gray-600">
+                      手机号
+                    </label>
                     <p className="mt-1 text-sm">{selectedUser.phone}</p>
                   </div>
                 )}
                 {selectedUser.major && (
                   <div>
-                    <label className="text-sm font-medium text-gray-600">专业</label>
+                    <label className="text-sm font-medium text-gray-600">
+                      专业
+                    </label>
                     <p className="mt-1 text-sm">{selectedUser.major}</p>
                   </div>
                 )}
                 {selectedUser.grade && (
                   <div>
-                    <label className="text-sm font-medium text-gray-600">年级</label>
+                    <label className="text-sm font-medium text-gray-600">
+                      年级
+                    </label>
                     <p className="mt-1 text-sm">{selectedUser.grade}</p>
                   </div>
                 )}
               </div>
-              
+
               <DialogFooter>
                 <Button onClick={() => setIsViewDialogOpen(false)}>关闭</Button>
               </DialogFooter>
@@ -747,114 +867,159 @@ function UserManagementPageContent({ user, logout }: UserManagementPageProps) {
               修改用户的基本信息、角色、状态和档案字段
             </DialogDescription>
           </DialogHeader>
-            <div className="space-y-6">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">用户名</label>
-                  <Input
-                    value={editFormData.name}
-                    onChange={(e) => setEditFormData(prev => ({ ...prev, name: e.target.value }))}
-                    placeholder="请输入用户名"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">邮箱</label>
-                  <Input
-                    type="email"
-                    value={editFormData.email}
-                    onChange={(e) => setEditFormData(prev => ({ ...prev, email: e.target.value }))}
-                    placeholder="请输入邮箱"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">用户角色</label>
-                  <Select
-                    value={editFormData.roleCode}
-                    onValueChange={(value) => setEditFormData(prev => ({ ...prev, roleCode: value }))}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="选择用户角色" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {rolesData && Array.isArray(rolesData) ? (
-                        rolesData.map((role) => (
-                          <SelectItem key={role.id} value={role.code}>
-                            {role.name}
-                          </SelectItem>
-                        ))
-                      ) : (
-                        <>
-                          <SelectItem value="candidate">候选人</SelectItem>
-                          <SelectItem value="club_admin">社团管理员</SelectItem>
-                          <SelectItem value="interviewer">面试官</SelectItem>
-                          <SelectItem value="admin">管理员</SelectItem>
-                        </>
-                      )}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">状态</label>
-                  <Select
-                    value={editFormData.status}
-                    onValueChange={(value: 'active' | 'inactive' | 'suspended') => 
-                      setEditFormData(prev => ({ ...prev, status: value }))
+          <div className="space-y-6">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  用户名
+                </label>
+                <Input
+                  value={editFormData.name}
+                  onChange={(e) =>
+                    setEditFormData((prev) => ({
+                      ...prev,
+                      name: e.target.value,
+                    }))
+                  }
+                  placeholder="请输入用户名"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  邮箱
+                </label>
+                <Input
+                  type="email"
+                  value={editFormData.email}
+                  onChange={(e) =>
+                    setEditFormData((prev) => ({
+                      ...prev,
+                      email: e.target.value,
+                    }))
+                  }
+                  placeholder="请输入邮箱"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  用户角色
+                </label>
+                <Select
+                  value={editFormData.roleCode}
+                  onValueChange={(value) =>
+                    setEditFormData((prev) => ({ ...prev, roleCode: value }))
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="选择用户角色" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {isRolesLoading ? (
+                      <div className="py-2 px-3 text-sm text-gray-500">
+                        加载中...
+                      </div>
+                    ) : rolesData &&
+                      Array.isArray(rolesData) &&
+                      rolesData.length > 0 ? (
+                      rolesData.map((role) => (
+                        <SelectItem key={role.id} value={role.code}>
+                          {role.name}
+                        </SelectItem>
+                      ))
+                    ) : (
+                      <div className="py-2 px-3 text-sm text-gray-500">
+                        暂无角色数据
+                      </div>
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  状态
+                </label>
+                <Select
+                  value={editFormData.status}
+                  onValueChange={(value: "active" | "inactive" | "suspended") =>
+                    setEditFormData((prev) => ({ ...prev, status: value }))
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="选择状态" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="active">激活</SelectItem>
+                    <SelectItem value="inactive">未激活</SelectItem>
+                    <SelectItem value="suspended">已暂停</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  头像URL
+                </label>
+                <Input
+                  value={editFormData.avatar}
+                  onChange={(e) =>
+                    setEditFormData((prev) => ({
+                      ...prev,
+                      avatar: e.target.value,
+                    }))
+                  }
+                  placeholder="请输入头像图片URL（可选）"
+                />
+              </div>
+              <div className="col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  状态修改原因
+                </label>
+                <Textarea
+                  value={editFormData.statusReason}
+                  onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
+                    setEditFormData((prev) => ({
+                      ...prev,
+                      statusReason: e.target.value,
+                    }))
+                  }
+                  placeholder="请输入状态修改的原因（可选）"
+                  rows={2}
+                />
+              </div>
+              <div className="col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  档案字段 (JSON格式)
+                </label>
+                <Textarea
+                  value={JSON.stringify(editFormData.profileFields, null, 2)}
+                  onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => {
+                    try {
+                      const parsed = JSON.parse(e.target.value);
+                      setEditFormData((prev) => ({
+                        ...prev,
+                        profileFields: parsed,
+                      }));
+                    } catch {
+                      // 如果解析失败，保持原值
                     }
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="选择状态" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="active">激活</SelectItem>
-                      <SelectItem value="inactive">未激活</SelectItem>
-                      <SelectItem value="suspended">已暂停</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">头像URL</label>
-                  <Input
-                    value={editFormData.avatar}
-                    onChange={(e) => setEditFormData(prev => ({ ...prev, avatar: e.target.value }))}
-                    placeholder="请输入头像图片URL（可选）"
-                  />
-                </div>
-                <div className="col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">状态修改原因</label>
-                  <Textarea
-                    value={editFormData.statusReason}
-                    onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setEditFormData(prev => ({ ...prev, statusReason: e.target.value }))}
-                    placeholder="请输入状态修改的原因（可选）"
-                    rows={2}
-                  />
-                </div>
-                <div className="col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">档案字段 (JSON格式)</label>
-                  <Textarea
-                    value={JSON.stringify(editFormData.profileFields, null, 2)}
-                    onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => {
-                      try {
-                        const parsed = JSON.parse(e.target.value)
-                        setEditFormData(prev => ({ ...prev, profileFields: parsed }))
-                      } catch {
-                        // 如果解析失败，保持原值
-                      }
-                    }}
-                    placeholder='{"studentId": "2022001001", "major": "计算机科学", "grade": "2022级"}'
-                    rows={4}
-                  />
-                </div>
+                  }}
+                  placeholder='{"studentId": "2022001001", "major": "计算机科学", "grade": "2022级"}'
+                  rows={4}
+                />
               </div>
             </div>
+          </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
+            <Button
+              variant="outline"
+              onClick={() => setIsEditDialogOpen(false)}
+            >
               取消
             </Button>
-            <Button 
+            <Button
               onClick={handleEditSubmit}
               disabled={editUserMutation.isPending}
             >
-              {editUserMutation.isPending ? '保存中...' : '保存更改'}
+              {editUserMutation.isPending ? "保存中..." : "保存更改"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -866,120 +1031,167 @@ function UserManagementPageContent({ user, logout }: UserManagementPageProps) {
           <DialogHeader>
             <DialogTitle>确认删除用户</DialogTitle>
             <DialogDescription>
-              您确定要删除用户 "{selectedUser?.name || selectedUser?.email || ''}" 吗？此操作无法撤销。
+              您确定要删除用户 "
+              {selectedUser?.name || selectedUser?.email || ""}"
+              吗？此操作无法撤销。
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               onClick={() => {
-                setIsDeleteDialogOpen(false)
-                setSelectedUser(null)
+                setIsDeleteDialogOpen(false);
+                setSelectedUser(null);
               }}
             >
               取消
             </Button>
-            <Button 
+            <Button
               variant="destructive"
               onClick={handleDeleteUser}
               disabled={deleteUserMutation.isPending}
             >
-              {deleteUserMutation.isPending ? '删除中...' : '确认删除'}
+              {deleteUserMutation.isPending ? "删除中..." : "确认删除"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       {/* 创建社团管理员对话框 */}
-      <Dialog open={isCreateClubAdminDialogOpen} onOpenChange={setIsCreateClubAdminDialogOpen}>
+      <Dialog
+        open={isCreateClubAdminDialogOpen}
+        onOpenChange={setIsCreateClubAdminDialogOpen}
+      >
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>创建社团管理员账号</DialogTitle>
-            <DialogDescription>
-              创建一个新的社团管理员账号
-            </DialogDescription>
+            <DialogDescription>创建一个新的社团管理员账号</DialogDescription>
           </DialogHeader>
           <div className="space-y-6">
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">姓名</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  姓名
+                </label>
                 <Input
                   value={createClubAdminForm.name}
-                  onChange={(e) => setCreateClubAdminForm(prev => ({ ...prev, name: e.target.value }))}
+                  onChange={(e) =>
+                    setCreateClubAdminForm((prev) => ({
+                      ...prev,
+                      name: e.target.value,
+                    }))
+                  }
                   placeholder="请输入管理员姓名"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">邮箱</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  邮箱
+                </label>
                 <Input
                   type="email"
                   value={createClubAdminForm.email}
-                  onChange={(e) => setCreateClubAdminForm(prev => ({ ...prev, email: e.target.value }))}
+                  onChange={(e) =>
+                    setCreateClubAdminForm((prev) => ({
+                      ...prev,
+                      email: e.target.value,
+                    }))
+                  }
                   placeholder="请输入邮箱地址"
                 />
               </div>
               <div className="col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-2">密码</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  密码
+                </label>
                 <Input
                   type="password"
                   value={createClubAdminForm.password}
-                  onChange={(e) => setCreateClubAdminForm(prev => ({ ...prev, password: e.target.value }))}
+                  onChange={(e) =>
+                    setCreateClubAdminForm((prev) => ({
+                      ...prev,
+                      password: e.target.value,
+                    }))
+                  }
                   placeholder="请输入初始密码（最少6位）"
                 />
               </div>
               <div className="col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-2">选择社团</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  选择社团
+                </label>
                 <Select
                   value={createClubAdminForm.clubId}
-                  onValueChange={(value) => setCreateClubAdminForm(prev => ({ ...prev, clubId: value }))}
+                  onValueChange={(value) =>
+                    setCreateClubAdminForm((prev) => ({
+                      ...prev,
+                      clubId: value,
+                    }))
+                  }
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="请选择要管理的社团" />
                   </SelectTrigger>
                   <SelectContent>
-                     {(clubsData?.data ?? []).map((club: Club) => (
-                       <SelectItem key={club.id} value={club.id}>
-                         {club.name}
-                       </SelectItem>
-                     ))}
+                    {(clubsData?.data ?? []).map((club: Club) => (
+                      <SelectItem key={club.id} value={club.id}>
+                        {club.name}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsCreateClubAdminDialogOpen(false)}>
+            <Button
+              variant="outline"
+              onClick={() => setIsCreateClubAdminDialogOpen(false)}
+            >
               取消
             </Button>
-            <Button 
-              onClick={() => createClubAdminMutation.mutate(createClubAdminForm)}
-              disabled={createClubAdminMutation.isPending || !createClubAdminForm.email || !createClubAdminForm.password || !createClubAdminForm.name || !createClubAdminForm.clubId}
+            <Button
+              onClick={() =>
+                createClubAdminMutation.mutate(createClubAdminForm)
+              }
+              disabled={
+                createClubAdminMutation.isPending ||
+                !createClubAdminForm.email ||
+                !createClubAdminForm.password ||
+                !createClubAdminForm.name ||
+                !createClubAdminForm.clubId
+              }
             >
-              {createClubAdminMutation.isPending ? '创建中...' : '创建账号'}
+              {createClubAdminMutation.isPending ? "创建中..." : "创建账号"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
-  )
+  );
 }
 
 export default function UserManagementPage() {
   return (
     <ProtectedRoute permission="user_view">
       <UserManagementPageContent
-        user={{ id: 'admin-1', name: '超级管理员', email: 'admin@example.com', role: 'system_admin' }}
+        user={{
+          id: "admin-1",
+          name: "超级管理员",
+          email: "admin@example.com",
+          role: "system_admin",
+        }}
         logout={async () => {
           try {
-            const { logout: logoutStore } = useAppStore.getState()
-            await logoutStore()
-            window.location.href = '/login'
+            const { logout: logoutStore } = useAppStore.getState();
+            await logoutStore();
+            window.location.href = "/login";
           } catch (error) {
-            console.error('退出登录失败:', error)
-            window.location.href = '/login'
+            console.error("退出登录失败:", error);
+            window.location.href = "/login";
           }
         }}
       />
     </ProtectedRoute>
-  )
+  );
 }

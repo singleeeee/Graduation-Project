@@ -12,7 +12,7 @@ export default function ApplicationsPage() {
   const { data, isLoading, isError, error } = useMyApplications()
   
   // FIX: Handle the proper data structure from API
-  const applications = data?.applications || data?.data || []
+  const applications = data?.applications || []
   
   // 调试日志
   console.log('Applications data:', data)

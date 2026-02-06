@@ -6,6 +6,7 @@ import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { useMenuItems } from '@/hooks/use-permissions'
 
 interface User {
   id: string | null
@@ -42,39 +43,9 @@ export function CandidateDashboard({
   // 获取当前路径用于菜单高亮
   const pathname = usePathname()
   
-  // 使用传入的菜单项或使用默认菜单项
-  const menuItems = propsMenuItems || [
-    {
-      title: '招新信息',
-      icon: '🎯',
-      href: '/recruitment',
-      current: pathname === '/recruitment'
-    },
-    {
-      title: '我的申请',
-      icon: '📝',
-      href: '/application',
-      current: pathname === '/application'
-    },
-    {
-      title: '个人信息',
-      icon: '👤',
-      href: '/profile',
-      current: pathname === '/profile'
-    },
-    {
-      title: '面试安排',
-      icon: '📅',
-      href: '/interviews',
-      current: pathname === '/interviews'
-    },
-    {
-      title: '申请记录',
-      icon: '📋',
-      href: '/history',
-      current: pathname === '/history'
-    }
-  ]
+  // 使用传入的菜单项或使用基于权限的动态菜单项
+  const dynamicMenuItems = useMenuItems(pathname || '/')
+  const menuItems = propsMenuItems || dynamicMenuItems
 
   return (
     <DashboardLayout

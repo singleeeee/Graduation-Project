@@ -19,12 +19,12 @@ export interface Application {
   recruitmentId: string;
   applicantId: string;
   status: ApplicationStatus;
-  resumeText?: string;
+
   education?: {
-    name: string;
+    name?: string;
     grade?: string;
     major?: string;
-    phone: string;
+    phone?: string;
     college?: string;
     studentId?: string;
     experience?: string;
@@ -33,8 +33,22 @@ export interface Application {
   };
   formData?: Record<string, any>;
   skills?: any;
-  experiences?: any;
-  attachments?: any;
+  experiences?: Array<{
+    type: 'project' | 'internship' | 'other';
+    title: string;
+    skills: string[];
+    endDate: string;
+    startDate: string;
+    description: string;
+    achievements: string;
+  }>;
+  attachments?: Array<{
+    file: object;
+    type: 'resume' | 'other';
+    filename: string;
+    description: string;
+    originalName: string;
+  }>;
   aiScore?: number;
   aiAnalysis?: any;
   createdAt: string;
@@ -145,6 +159,7 @@ export interface ApplicationQueryParams {
   status?: ApplicationStatus;
   recruitmentId?: string;
   applicantId?: string;
+  clubId?: string; // 添加社团ID筛选
   page?: number;
   limit?: number;
 }

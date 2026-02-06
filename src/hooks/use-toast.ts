@@ -171,6 +171,43 @@ function toast({ ...props }: Toast) {
   }
 }
 
+// 扩展 toast 函数，添加便捷方法
+export function createToastExpander(toastFn: typeof toast) {
+  return Object.assign(toastFn, {
+    success: (description: string, title: string = '成功') => {
+      return toastFn({
+        title,
+        description,
+        variant: 'default',
+      })
+    },
+    error: (description: string, title: string = '错误') => {
+      return toastFn({
+        title,
+        description,
+        variant: 'destructive',
+      })
+    },
+    warning: (description: string, title: string = '警告') => {
+      return toastFn({
+        title,
+        description,
+        variant: 'default',
+      })
+    },
+    info: (description: string, title: string = '提示') => {
+      return toastFn({
+        title,
+        description,
+        variant: 'default',
+      })
+    },
+  })
+}
+
+// 创建一个带有便捷方法的 toast 实例
+export const expandedToast = createToastExpander(toast)
+
 function useToast() {
   const [state, setState] = React.useState<State>(memoryState)
 
