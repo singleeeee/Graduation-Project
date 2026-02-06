@@ -1,9 +1,9 @@
-'use client'
+"use client";
 
-import { useState } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { useAppStore } from '@/store'
-import { useToast } from '@/hooks/use-toast'
+import { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useAppStore } from "@/store";
+import { useToast } from "@/hooks/use-toast";
 import {
   Search,
   Plus,
@@ -12,19 +12,25 @@ import {
   Users,
   Settings,
   ImageIcon,
-  Building2
-} from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+  Building2,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select'
+} from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -32,7 +38,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from '@/components/ui/table'
+} from "@/components/ui/table";
 import {
   Dialog,
   DialogContent,
@@ -42,162 +48,178 @@ import {
   DialogTitle,
   DialogTrigger,
   DialogClose,
-} from '@/components/ui/dialog'
+} from "@/components/ui/dialog";
 import {
   Form,
   FormControl,
   FormField,
   FormItem,
   FormMessage,
-} from '@/components/ui/form'
-import { Badge } from '@/components/ui/badge'
-import { ProtectedRoute } from '@/components/auth/ProtectedRoute'
-import { clubsApi, usersApi } from '@/lib/api'
-import type { Club, ClubListParams, CreateClubRequest, UpdateClubRequest } from '@/lib/api'
+} from "@/components/ui/form";
+import { Badge } from "@/components/ui/badge";
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
+import { clubsApi, usersApi } from "@/lib/api";
+import type {
+  Club,
+  ClubListParams,
+  CreateClubRequest,
+  UpdateClubRequest,
+} from "@/lib/api";
 
 interface ClubFilters {
-  search: string
-  category: string
-  isActive: string
+  search: string;
+  category: string;
+  isActive: string;
 }
 
-
-function ClubManagementPageContent({ user, logout }: { user: any; logout: () => void }) {
+function ClubManagementPageContent({
+  user,
+  logout,
+}: {
+  user: any;
+  logout: () => void;
+}) {
   const [filters, setFilters] = useState<ClubFilters>({
-    search: '',
-    category: 'all',
-    isActive: 'all',
-  })
-  const [currentPage, setCurrentPage] = useState(1)
-  const [pageSize, setPageSize] = useState(10)
-  const [selectedClub, setSelectedClub] = useState<Club | null>(null)
-  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
-  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
-  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
-  const [isMembersDialogOpen, setIsMembersDialogOpen] = useState(false)
-  
-  const queryClient = useQueryClient()
-  const { toast } = useToast()
+    search: "",
+    category: "all",
+    isActive: "active",
+  });
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [selectedClub, setSelectedClub] = useState<Club | null>(null);
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isMembersDialogOpen, setIsMembersDialogOpen] = useState(false);
+
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
 
   // 查询参数
   const queryParams: ClubListParams = {
     page: currentPage,
     limit: pageSize,
     ...(filters.search && { search: filters.search }),
-    ...(filters.category !== 'all' && { category: filters.category }),
-    ...(filters.isActive !== 'all' && { isActive: filters.isActive === 'active' }),
-  }
+    ...(filters.category !== "all" && { category: filters.category }),
+    ...(filters.isActive !== "all" && {
+      isActive: filters.isActive === "active",
+    }),
+  };
 
   // 获取社团列表
-  const { data: clubsData, isLoading, error } = useQuery({
-    queryKey: ['clubs', queryParams],
+  const {
+    data: clubsData,
+    isLoading,
+    error,
+  } = useQuery({
+    queryKey: ["clubs", queryParams],
     queryFn: () => {
-      return clubsApi.getClubs(queryParams)
+      return clubsApi.getClubs(queryParams);
     },
     enabled: true,
     staleTime: 0, // 禁用缓存，每次切换都重新获取数据
     refetchOnWindowFocus: true, // 窗口获得焦点时重新获取
     refetchOnMount: true, // 组件挂载时重新获取
-  })
+  });
 
   // 创建社团
   const createClubMutation = useMutation({
     mutationFn: (data: CreateClubRequest) => clubsApi.createClub(data),
     onSuccess: () => {
-      toast({ title: '成功', description: '社团创建成功' })
-      queryClient.invalidateQueries({ queryKey: ['clubs'] })
-      setIsCreateDialogOpen(false)
+      toast({ title: "成功", description: "社团创建成功" });
+      queryClient.invalidateQueries({ queryKey: ["clubs"] });
+      setIsCreateDialogOpen(false);
     },
     onError: (error: any) => {
       toast({
-        title: '错误',
-        description: error?.response?.data?.message || '创建社团失败',
-        variant: 'destructive',
-      })
+        title: "错误",
+        description: error?.response?.data?.message || "创建社团失败",
+        variant: "destructive",
+      });
     },
-  })
+  });
 
   // 更新社团
   const updateClubMutation = useMutation({
     mutationFn: ({ id, data }: { id: string; data: UpdateClubRequest }) =>
       clubsApi.updateClub(id, data),
     onSuccess: () => {
-      toast({ title: '成功', description: '社团信息更新成功' })
-      queryClient.invalidateQueries({ queryKey: ['clubs'] })
-      setIsEditDialogOpen(false)
-      setSelectedClub(null)
+      toast({ title: "成功", description: "社团信息更新成功" });
+      queryClient.invalidateQueries({ queryKey: ["clubs"] });
+      setIsEditDialogOpen(false);
+      setSelectedClub(null);
     },
     onError: (error: any) => {
       toast({
-        title: '错误',
-        description: error?.response?.data?.message || '更新社团信息失败',
-        variant: 'destructive',
-      })
+        title: "错误",
+        description: error?.response?.data?.message || "更新社团信息失败",
+        variant: "destructive",
+      });
     },
-  })
+  });
 
   // 删除社团
   const deleteClubMutation = useMutation({
     mutationFn: (id: string) => clubsApi.deleteClub(id),
     onSuccess: () => {
-      toast({ title: '成功', description: '社团删除成功' })
-      queryClient.invalidateQueries({ queryKey: ['clubs'] })
-      setIsDeleteDialogOpen(false)
-      setSelectedClub(null)
+      toast({ title: "成功", description: "社团删除成功" });
+      queryClient.invalidateQueries({ queryKey: ["clubs"] });
+      setIsDeleteDialogOpen(false);
+      setSelectedClub(null);
     },
     onError: (error: any) => {
       toast({
-        title: '错误',
-        description: error?.response?.data?.message || '删除社团失败',
-        variant: 'destructive',
-      })
+        title: "错误",
+        description: error?.response?.data?.message || "删除社团失败",
+        variant: "destructive",
+      });
     },
-  })
+  });
 
   const handleSearch = (value: string) => {
-    setFilters((prev) => ({ ...prev, search: value }))
-    setCurrentPage(1) // 重置页码
-  }
+    setFilters((prev) => ({ ...prev, search: value }));
+    setCurrentPage(1); // 重置页码
+  };
 
   const handleCategoryChange = (value: string) => {
-    setFilters((prev) => ({ ...prev, category: value }))
-    setCurrentPage(1)
-  }
+    setFilters((prev) => ({ ...prev, category: value }));
+    setCurrentPage(1);
+  };
 
   const handleStatusChange = (value: string) => {
-    setFilters((prev) => ({ ...prev, isActive: value }))
-    setCurrentPage(1)
-  }
+    setFilters((prev) => ({ ...prev, isActive: value }));
+    setCurrentPage(1);
+  };
 
   const handleEdit = (club: Club) => {
-    setSelectedClub(club)
-    setIsEditDialogOpen(true)
-  }
+    setSelectedClub(club);
+    setIsEditDialogOpen(true);
+  };
 
   const handleDelete = (club: Club) => {
-    setSelectedClub(club)
-    setIsDeleteDialogOpen(true)
-  }
+    setSelectedClub(club);
+    setIsDeleteDialogOpen(true);
+  };
 
   const handleManageMembers = (club: Club) => {
-    setSelectedClub(club)
-    setIsMembersDialogOpen(true)
-  }
+    setSelectedClub(club);
+    setIsMembersDialogOpen(true);
+  };
 
   const handleDeleteConfirm = () => {
     if (selectedClub) {
-      deleteClubMutation.mutate(selectedClub.id)
+      deleteClubMutation.mutate(selectedClub.id);
     }
-  }
- 
-  const clubs = clubsData?.data || []
-  const totalPages = clubsData?.totalPages || 0
+  };
+
+  const clubs = clubsData?.data || [];
+  const totalPages = clubsData?.totalPages || 0;
 
   return (
     <div className="mx-auto">
       <div className="flex justify-between items-center mb-6">
         <div>
-          <h1 className="text-3xl font-bold">社团管理</h1>
+          <h1 className="text-2xl font-bold">社团管理</h1>
           <p className="text-gray-500 mt-2">管理所有社团信息、成员和权限</p>
         </div>
         <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
@@ -214,7 +236,9 @@ function ClubManagementPageContent({ user, logout }: { user: any; logout: () => 
                 创建一个新的社团，设置基本信息和分类
               </DialogDescription>
             </DialogHeader>
-            <CreateClubForm onSubmit={(data) => createClubMutation.mutate(data)} />
+            <CreateClubForm
+              onSubmit={(data) => createClubMutation.mutate(data)}
+            />
           </DialogContent>
         </Dialog>
       </div>
@@ -238,7 +262,7 @@ function ClubManagementPageContent({ user, logout }: { user: any; logout: () => 
               <div>
                 <p className="text-sm font-medium text-gray-500">活跃社团</p>
                 <p className="text-2xl font-bold">
-                  {clubs.filter(c => c.isActive).length}
+                  {clubs.filter((c) => c.isActive).length}
                 </p>
               </div>
               <Badge variant="secondary">活跃</Badge>
@@ -288,7 +312,10 @@ function ClubManagementPageContent({ user, logout }: { user: any; logout: () => 
                 />
               </div>
             </div>
-            <Select value={filters.category} onValueChange={handleCategoryChange}>
+            <Select
+              value={filters.category}
+              onValueChange={handleCategoryChange}
+            >
               <SelectTrigger className="w-[180px]">
                 <SelectValue placeholder="社团分类" />
               </SelectTrigger>
@@ -318,9 +345,7 @@ function ClubManagementPageContent({ user, logout }: { user: any; logout: () => 
       <Card>
         <CardHeader>
           <CardTitle>社团列表</CardTitle>
-          <CardDescription>
-            共 {clubsData?.total || 0} 个社团
-          </CardDescription>
+          <CardDescription>共 {clubsData?.total || 0} 个社团</CardDescription>
         </CardHeader>
         <CardContent>
           <Table>
@@ -378,8 +403,8 @@ function ClubManagementPageContent({ user, logout }: { user: any; logout: () => 
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      <Badge variant={club.isActive ? 'default' : 'secondary'}>
-                        {club.isActive ? '活跃' : '非活跃'}
+                      <Badge variant={club.isActive ? "default" : "secondary"}>
+                        {club.isActive ? "活跃" : "非活跃"}
                       </Badge>
                     </TableCell>
                     <TableCell>{club.candidateCount}</TableCell>
@@ -423,13 +448,17 @@ function ClubManagementPageContent({ user, logout }: { user: any; logout: () => 
           {totalPages > 1 && (
             <div className="flex items-center justify-between mt-4">
               <div className="text-sm text-gray-500">
-                显示 {(currentPage - 1) * pageSize + 1} - {Math.min(currentPage * pageSize, clubsData?.total || 0)} 条，共 {clubsData?.total} 条
+                显示 {(currentPage - 1) * pageSize + 1} -{" "}
+                {Math.min(currentPage * pageSize, clubsData?.total || 0)} 条，共{" "}
+                {clubsData?.total} 条
               </div>
               <div className="flex items-center gap-2">
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+                  onClick={() =>
+                    setCurrentPage((prev) => Math.max(1, prev - 1))
+                  }
                   disabled={currentPage === 1}
                 >
                   上一页
@@ -440,7 +469,9 @@ function ClubManagementPageContent({ user, logout }: { user: any; logout: () => 
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+                  onClick={() =>
+                    setCurrentPage((prev) => Math.min(totalPages, prev + 1))
+                  }
                   disabled={currentPage === totalPages}
                 >
                   下一页
@@ -456,14 +487,14 @@ function ClubManagementPageContent({ user, logout }: { user: any; logout: () => 
         <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
             <DialogTitle>编辑社团</DialogTitle>
-            <DialogDescription>
-              修改社团的基本信息
-            </DialogDescription>
+            <DialogDescription>修改社团的基本信息</DialogDescription>
           </DialogHeader>
           {selectedClub && (
             <EditClubForm
               club={selectedClub}
-              onSubmit={(data) => updateClubMutation.mutate({ id: selectedClub.id, data })}
+              onSubmit={(data) =>
+                updateClubMutation.mutate({ id: selectedClub.id, data })
+              }
             />
           )}
         </DialogContent>
@@ -475,7 +506,8 @@ function ClubManagementPageContent({ user, logout }: { user: any; logout: () => 
           <DialogHeader>
             <DialogTitle>确认删除</DialogTitle>
             <DialogDescription>
-              确定要删除社团 &ldquo;{selectedClub?.name}&rdquo; 吗？此操作将软删除社团信息。
+              确定要删除社团 &ldquo;{selectedClub?.name}&rdquo;
+              吗？此操作将软删除社团信息。
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -487,7 +519,7 @@ function ClubManagementPageContent({ user, logout }: { user: any; logout: () => 
               onClick={handleDeleteConfirm}
               disabled={deleteClubMutation.isPending}
             >
-              {deleteClubMutation.isPending ? '删除中...' : '确认删除'}
+              {deleteClubMutation.isPending ? "删除中..." : "确认删除"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -498,31 +530,31 @@ function ClubManagementPageContent({ user, logout }: { user: any; logout: () => 
         <DialogContent className="sm:max-w-[700px]">
           <DialogHeader>
             <DialogTitle>成员管理 - {selectedClub?.name}</DialogTitle>
-            <DialogDescription>
-              管理社团成员和权限
-            </DialogDescription>
+            <DialogDescription>管理社团成员和权限</DialogDescription>
           </DialogHeader>
-          {selectedClub && (
-            <ClubMembersManagement clubId={selectedClub.id} />
-          )}
+          {selectedClub && <ClubMembersManagement clubId={selectedClub.id} />}
         </DialogContent>
       </Dialog>
     </div>
-  )
+  );
 }
 
 // 创建社团表单组件
-function CreateClubForm({ onSubmit }: { onSubmit: (data: CreateClubRequest) => void }) {
+function CreateClubForm({
+  onSubmit,
+}: {
+  onSubmit: (data: CreateClubRequest) => void;
+}) {
   const [formData, setFormData] = useState<CreateClubRequest>({
-    name: '',
-    description: '',
-    category: '学术科技',
-  })
+    name: "",
+    description: "",
+    category: "学术科技",
+  });
 
   const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    onSubmit(formData)
-  }
+    e.preventDefault();
+    onSubmit(formData);
+  };
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
@@ -531,7 +563,9 @@ function CreateClubForm({ onSubmit }: { onSubmit: (data: CreateClubRequest) => v
         <Input
           id="create-club-name"
           value={formData.name}
-          onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
+          onChange={(e) =>
+            setFormData((prev) => ({ ...prev, name: e.target.value }))
+          }
           placeholder="请输入社团名称"
           required
         />
@@ -541,7 +575,9 @@ function CreateClubForm({ onSubmit }: { onSubmit: (data: CreateClubRequest) => v
         <Input
           id="create-club-description"
           value={formData.description}
-          onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value }))}
+          onChange={(e) =>
+            setFormData((prev) => ({ ...prev, description: e.target.value }))
+          }
           placeholder="请输入社团描述"
           required
         />
@@ -550,7 +586,9 @@ function CreateClubForm({ onSubmit }: { onSubmit: (data: CreateClubRequest) => v
         <Label htmlFor="create-club-category">社团分类</Label>
         <Select
           value={formData.category}
-          onValueChange={(value) => setFormData((prev) => ({ ...prev, category: value }))}
+          onValueChange={(value) =>
+            setFormData((prev) => ({ ...prev, category: value }))
+          }
         >
           <SelectTrigger>
             <SelectValue />
@@ -565,12 +603,14 @@ function CreateClubForm({ onSubmit }: { onSubmit: (data: CreateClubRequest) => v
       </div>
       <DialogFooter>
         <DialogClose asChild>
-          <Button variant="outline" type="button">取消</Button>
+          <Button variant="outline" type="button">
+            取消
+          </Button>
         </DialogClose>
         <Button type="submit">创建</Button>
       </DialogFooter>
     </form>
-  )
+  );
 }
 
 // 编辑社团表单组件
@@ -578,20 +618,20 @@ function EditClubForm({
   club,
   onSubmit,
 }: {
-  club: Club
-  onSubmit: (data: UpdateClubRequest) => void
+  club: Club;
+  onSubmit: (data: UpdateClubRequest) => void;
 }) {
   const [formData, setFormData] = useState<UpdateClubRequest>({
     name: club.name,
     description: club.description,
     category: club.category,
     isActive: club.isActive,
-  })
+  });
 
   const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    onSubmit(formData)
-  }
+    e.preventDefault();
+    onSubmit(formData);
+  };
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
@@ -600,7 +640,9 @@ function EditClubForm({
         <Input
           id="edit-club-name"
           value={formData.name}
-          onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
+          onChange={(e) =>
+            setFormData((prev) => ({ ...prev, name: e.target.value }))
+          }
           placeholder="请输入社团名称"
           required
         />
@@ -610,7 +652,9 @@ function EditClubForm({
         <Input
           id="edit-club-description"
           value={formData.description}
-          onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value }))}
+          onChange={(e) =>
+            setFormData((prev) => ({ ...prev, description: e.target.value }))
+          }
           placeholder="请输入社团描述"
           required
         />
@@ -619,7 +663,9 @@ function EditClubForm({
         <Label htmlFor="edit-club-category">社团分类</Label>
         <Select
           value={formData.category}
-          onValueChange={(value) => setFormData((prev) => ({ ...prev, category: value }))}
+          onValueChange={(value) =>
+            setFormData((prev) => ({ ...prev, category: value }))
+          }
         >
           <SelectTrigger>
             <SelectValue />
@@ -635,8 +681,10 @@ function EditClubForm({
       <div>
         <Label htmlFor="edit-club-status">状态</Label>
         <Select
-          value={formData.isActive ? 'active' : 'inactive'}
-          onValueChange={(value) => setFormData((prev) => ({ ...prev, isActive: value === 'active' }))}
+          value={formData.isActive ? "active" : "inactive"}
+          onValueChange={(value) =>
+            setFormData((prev) => ({ ...prev, isActive: value === "active" }))
+          }
         >
           <SelectTrigger>
             <SelectValue />
@@ -649,119 +697,130 @@ function EditClubForm({
       </div>
       <DialogFooter>
         <DialogClose asChild>
-          <Button variant="outline" type="button">取消</Button>
+          <Button variant="outline" type="button">
+            取消
+          </Button>
         </DialogClose>
         <Button type="submit">保存</Button>
       </DialogFooter>
     </form>
-  )
+  );
 }
 
 // 社团成员管理组件
 function ClubMembersManagement({ clubId }: { clubId: string }) {
   const [membersParams, setMembersParams] = useState({
-    role: 'all',
-    search: '',
-  })
-  const [currentPage, setCurrentPage] = useState(1)
-  const [pageSize] = useState(10)
-  const [selectedMember, setSelectedMember] = useState<any | null>(null)
-  const [isAddMemberDialogOpen, setIsAddMemberDialogOpen] = useState(false)
-  const [isEditRoleDialogOpen, setIsEditRoleDialogOpen] = useState(false)
-  const [isRemoveDialogOpen, setIsRemoveDialogOpen] = useState(false)
+    role: "all",
+    search: "",
+  });
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize] = useState(10);
+  const [selectedMember, setSelectedMember] = useState<any | null>(null);
+  const [isAddMemberDialogOpen, setIsAddMemberDialogOpen] = useState(false);
+  const [isEditRoleDialogOpen, setIsEditRoleDialogOpen] = useState(false);
+  const [isRemoveDialogOpen, setIsRemoveDialogOpen] = useState(false);
 
-  const queryClient = useQueryClient()
-  const { toast } = useToast()
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
 
   // 获取社团成员列表
   const { data: membersData, isLoading } = useQuery({
-    queryKey: ['club-members', clubId, membersParams, currentPage],
-    queryFn: () => clubsApi.getClubMembers(clubId, {
-      page: currentPage,
-      limit: pageSize,
-      role: membersParams.role === 'all' ? undefined : membersParams.role as any,
-      search: membersParams.search || undefined,
-    }),
+    queryKey: ["club-members", clubId, membersParams, currentPage],
+    queryFn: () =>
+      clubsApi.getClubMembers(clubId, {
+        page: currentPage,
+        limit: pageSize,
+        role:
+          membersParams.role === "all"
+            ? undefined
+            : (membersParams.role as any),
+        search: membersParams.search || undefined,
+      }),
     enabled: true,
-  })
+  });
 
   // 添加成员
   const addMemberMutation = useMutation({
-    mutationFn: (data: { userId: string; role: 'admin' | 'candidate' }) =>
+    mutationFn: (data: { userId: string; role: "admin" | "candidate" }) =>
       clubsApi.addMember(clubId, data),
     onSuccess: () => {
-      toast({ title: '成功', description: '成员添加成功' })
-      queryClient.invalidateQueries({ queryKey: ['club-members'] })
-      setIsAddMemberDialogOpen(false)
+      toast({ title: "成功", description: "成员添加成功" });
+      queryClient.invalidateQueries({ queryKey: ["club-members"] });
+      setIsAddMemberDialogOpen(false);
     },
     onError: (error: any) => {
       toast({
-        title: '错误',
-        description: error?.response?.data?.message || '添加成员失败',
-        variant: 'destructive',
-      })
+        title: "错误",
+        description: error?.response?.data?.message || "添加成员失败",
+        variant: "destructive",
+      });
     },
-  })
+  });
 
   // 更新成员角色
   const updateRoleMutation = useMutation({
-    mutationFn: ({ memberId, role }: { memberId: string; role: 'admin' | 'candidate' }) =>
-      clubsApi.updateMemberRole(clubId, memberId, { role }),
+    mutationFn: ({
+      memberId,
+      role,
+    }: {
+      memberId: string;
+      role: "admin" | "candidate";
+    }) => clubsApi.updateMemberRole(clubId, memberId, { role }),
     onSuccess: () => {
-      toast({ title: '成功', description: '成员角色更新成功' })
-      queryClient.invalidateQueries({ queryKey: ['club-members'] })
-      setIsEditRoleDialogOpen(false)
-      setSelectedMember(null)
+      toast({ title: "成功", description: "成员角色更新成功" });
+      queryClient.invalidateQueries({ queryKey: ["club-members"] });
+      setIsEditRoleDialogOpen(false);
+      setSelectedMember(null);
     },
     onError: (error: any) => {
       toast({
-        title: '错误',
-        description: error?.response?.data?.message || '更新成员角色失败',
-        variant: 'destructive',
-      })
+        title: "错误",
+        description: error?.response?.data?.message || "更新成员角色失败",
+        variant: "destructive",
+      });
     },
-  })
+  });
 
   // 移除成员
   const removeMemberMutation = useMutation({
     mutationFn: (memberId: string) => clubsApi.removeMember(clubId, memberId),
     onSuccess: () => {
-      toast({ title: '成功', description: '成员移除成功' })
-      queryClient.invalidateQueries({ queryKey: ['club-members'] })
-      setIsRemoveDialogOpen(false)
-      setSelectedMember(null)
+      toast({ title: "成功", description: "成员移除成功" });
+      queryClient.invalidateQueries({ queryKey: ["club-members"] });
+      setIsRemoveDialogOpen(false);
+      setSelectedMember(null);
     },
     onError: (error: any) => {
       toast({
-        title: '错误',
-        description: error?.response?.data?.message || '移除成员失败',
-        variant: 'destructive',
-      })
+        title: "错误",
+        description: error?.response?.data?.message || "移除成员失败",
+        variant: "destructive",
+      });
     },
-  })
+  });
 
   const handleSearch = (value: string) => {
-    setMembersParams(prev => ({ ...prev, search: value }))
-    setCurrentPage(1)
-  }
+    setMembersParams((prev) => ({ ...prev, search: value }));
+    setCurrentPage(1);
+  };
 
   const handleRoleFilter = (role: string) => {
-    setMembersParams(prev => ({ ...prev, role }))
-    setCurrentPage(1)
-  }
+    setMembersParams((prev) => ({ ...prev, role }));
+    setCurrentPage(1);
+  };
 
   const handleEditRole = (member: any) => {
-    setSelectedMember(member)
-    setIsEditRoleDialogOpen(true)
-  }
+    setSelectedMember(member);
+    setIsEditRoleDialogOpen(true);
+  };
 
   const handleRemove = (member: any) => {
-    setSelectedMember(member)
-    setIsRemoveDialogOpen(true)
-  }
+    setSelectedMember(member);
+    setIsRemoveDialogOpen(true);
+  };
 
-  const members = membersData?.data || []
-  const totalPages = membersData?.totalPages || 0
+  const members = membersData?.data || [];
+  const totalPages = membersData?.totalPages || 0;
 
   return (
     <div className="space-y-4">
@@ -838,13 +897,19 @@ function ClubMembersManagement({ clubId }: { clubId: string }) {
                       </div>
                       <div>
                         <div className="font-medium">{member.user.name}</div>
-                        <div className="text-sm text-gray-500">{member.user.email}</div>
+                        <div className="text-sm text-gray-500">
+                          {member.user.email}
+                        </div>
                       </div>
                     </div>
                   </TableCell>
                   <TableCell>
-                    <Badge variant={member.role === 'admin' ? 'default' : 'secondary'}>
-                      {member.role === 'admin' ? '管理员' : '候选人'}
+                    <Badge
+                      variant={
+                        member.role === "admin" ? "default" : "secondary"
+                      }
+                    >
+                      {member.role === "admin" ? "管理员" : "候选人"}
                     </Badge>
                   </TableCell>
                   <TableCell>
@@ -879,7 +944,9 @@ function ClubMembersManagement({ clubId }: { clubId: string }) {
         {totalPages > 1 && (
           <div className="flex items-center justify-between p-4 border-t">
             <div className="text-sm text-gray-500">
-              显示 {(currentPage - 1) * pageSize + 1} - {Math.min(currentPage * pageSize, membersData?.total || 0)} 条，共 {membersData?.total} 条
+              显示 {(currentPage - 1) * pageSize + 1} -{" "}
+              {Math.min(currentPage * pageSize, membersData?.total || 0)} 条，共{" "}
+              {membersData?.total} 条
             </div>
             <div className="flex items-center gap-2">
               <Button
@@ -896,7 +963,9 @@ function ClubMembersManagement({ clubId }: { clubId: string }) {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+                onClick={() =>
+                  setCurrentPage((prev) => Math.min(totalPages, prev + 1))
+                }
                 disabled={currentPage === totalPages}
               >
                 下一页
@@ -907,13 +976,14 @@ function ClubMembersManagement({ clubId }: { clubId: string }) {
       </div>
 
       {/* 添加成员对话框 */}
-      <Dialog open={isAddMemberDialogOpen} onOpenChange={setIsAddMemberDialogOpen}>
+      <Dialog
+        open={isAddMemberDialogOpen}
+        onOpenChange={setIsAddMemberDialogOpen}
+      >
         <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
             <DialogTitle>添加成员</DialogTitle>
-            <DialogDescription>
-              将用户添加为社团成员
-            </DialogDescription>
+            <DialogDescription>将用户添加为社团成员</DialogDescription>
           </DialogHeader>
           <AddMemberForm
             clubId={clubId}
@@ -924,7 +994,10 @@ function ClubMembersManagement({ clubId }: { clubId: string }) {
       </Dialog>
 
       {/* 编辑角色对话框 */}
-      <Dialog open={isEditRoleDialogOpen} onOpenChange={setIsEditRoleDialogOpen}>
+      <Dialog
+        open={isEditRoleDialogOpen}
+        onOpenChange={setIsEditRoleDialogOpen}
+      >
         <DialogContent className="sm:max-w-[400px]">
           <DialogHeader>
             <DialogTitle>修改角色</DialogTitle>
@@ -935,10 +1008,12 @@ function ClubMembersManagement({ clubId }: { clubId: string }) {
           {selectedMember && (
             <EditRoleForm
               currentRole={selectedMember.role}
-              onSubmit={(role) => updateRoleMutation.mutate({ memberId: selectedMember.id, role })}
+              onSubmit={(role) =>
+                updateRoleMutation.mutate({ memberId: selectedMember.id, role })
+              }
               onCancel={() => {
-                setIsEditRoleDialogOpen(false)
-                setSelectedMember(null)
+                setIsEditRoleDialogOpen(false);
+                setSelectedMember(null);
               }}
             />
           )}
@@ -955,24 +1030,29 @@ function ClubMembersManagement({ clubId }: { clubId: string }) {
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={() => {
-              setIsRemoveDialogOpen(false)
-              setSelectedMember(null)
-            }}>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsRemoveDialogOpen(false);
+                setSelectedMember(null);
+              }}
+            >
               取消
             </Button>
             <Button
               variant="destructive"
-              onClick={() => selectedMember && removeMemberMutation.mutate(selectedMember.id)}
+              onClick={() =>
+                selectedMember && removeMemberMutation.mutate(selectedMember.id)
+              }
               disabled={removeMemberMutation.isPending}
             >
-              {removeMemberMutation.isPending ? '移除中...' : '确认移除'}
+              {removeMemberMutation.isPending ? "移除中..." : "确认移除"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
-  )
+  );
 }
 
 // 添加成员表单组件
@@ -981,72 +1061,81 @@ function AddMemberForm({
   onSubmit,
   onCancel,
 }: {
-  clubId: string
-  onSubmit: (data: { userId: string; role: 'admin' | 'candidate' }) => void
-  onCancel: () => void
+  clubId: string;
+  onSubmit: (data: { userId: string; role: "admin" | "candidate" }) => void;
+  onCancel: () => void;
 }) {
-  const [selectedUserId, setSelectedUserId] = useState<string>('')
-  const [selectedRole, setSelectedRole] = useState<'admin' | 'candidate'>('candidate')
-  const [searchTerm, setSearchTerm] = useState('')
-  const [searchResults, setSearchResults] = useState<any[]>([])
-  const [isSearching, setIsSearching] = useState(false)
+  const [selectedUserId, setSelectedUserId] = useState<string>("");
+  const [selectedRole, setSelectedRole] = useState<"admin" | "candidate">(
+    "candidate",
+  );
+  const [searchTerm, setSearchTerm] = useState("");
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
 
-  const { toast } = useToast()
-  const queryClient = useQueryClient()
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   // 搜索用户
   const searchUsersMutation = useMutation({
     mutationFn: async (search: string) => {
       // 这里应该调用搜索用户的API，暂时使用模拟数据
-      if (!search.trim()) return []
+      if (!search.trim()) return [];
       const response = await usersApi.getUsers({
         page: 1,
         limit: 10,
         search,
-      })
+      });
       // 过滤掉已经是社团成员的用户
-      const existingMembersResponse = await clubsApi.getClubMembers(clubId, { page: 1, limit: 100 })
-      const existingMemberIds = existingMembersResponse.data.map(m => m.userId)
-      return response.users.filter(user => !existingMemberIds.includes(user.id))
+      const existingMembersResponse = await clubsApi.getClubMembers(clubId, {
+        page: 1,
+        limit: 100,
+      });
+      const existingMemberIds = existingMembersResponse.data.map(
+        (m) => m.userId,
+      );
+      return response.users.filter(
+        (user) => !existingMemberIds.includes(user.id),
+      );
     },
     onSuccess: (users) => {
-      setSearchResults(users)
-      setIsSearching(false)
+      setSearchResults(users);
+      setIsSearching(false);
     },
     onError: (error) => {
       toast({
-        title: '错误',
-        description: '搜索用户失败',
-        variant: 'destructive',
-      })
-      setIsSearching(false)
+        title: "错误",
+        description: "搜索用户失败",
+        variant: "destructive",
+      });
+      setIsSearching(false);
     },
-  })
+  });
 
   const handleSearch = (value: string) => {
-    setSearchTerm(value)
+    setSearchTerm(value);
     if (value.trim()) {
-      setIsSearching(true)
-      searchUsersMutation.mutate(value)
+      setIsSearching(true);
+      searchUsersMutation.mutate(value);
     } else {
-      setSearchResults([])
+      setSearchResults([]);
     }
-  }
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
+    e.preventDefault();
     if (!selectedUserId) {
       toast({
-        title: '错误',
-        description: '请选择用户',
-        variant: 'destructive',
-      })
-      return
+        title: "错误",
+        description: "请选择用户",
+        variant: "destructive",
+      });
+      return;
     }
-    onSubmit({ userId: selectedUserId, role: selectedRole })
-  }
+    onSubmit({ userId: selectedUserId, role: selectedRole });
+  };
 
-  const isSubmitting = searchUsersMutation.isPending
+  const isSubmitting = searchUsersMutation.isPending;
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
@@ -1059,9 +1148,7 @@ function AddMemberForm({
           placeholder="输入姓名或邮箱搜索用户..."
           disabled={searchUsersMutation.isPending}
         />
-        {isSearching && (
-          <p className="text-sm text-gray-500 mt-1">搜索中...</p>
-        )}
+        {isSearching && <p className="text-sm text-gray-500 mt-1">搜索中...</p>}
       </div>
 
       {/* 搜索结果 */}
@@ -1071,7 +1158,7 @@ function AddMemberForm({
             <div
               key={user.id}
               className={`p-3 cursor-pointer hover:bg-gray-50 border-b last:border-b-0 ${
-                selectedUserId === user.id ? 'bg-blue-50 border-blue-200' : ''
+                selectedUserId === user.id ? "bg-blue-50 border-blue-200" : ""
               }`}
               onClick={() => setSelectedUserId(user.id)}
             >
@@ -1096,7 +1183,10 @@ function AddMemberForm({
 
       <div>
         <Label htmlFor="user-role">角色</Label>
-        <Select value={selectedRole} onValueChange={(value: any) => setSelectedRole(value)}>
+        <Select
+          value={selectedRole}
+          onValueChange={(value: any) => setSelectedRole(value)}
+        >
           <SelectTrigger>
             <SelectValue />
           </SelectTrigger>
@@ -1112,11 +1202,11 @@ function AddMemberForm({
           取消
         </Button>
         <Button type="submit" disabled={!selectedUserId || isSubmitting}>
-          {isSubmitting ? '添加中...' : '添加到社团'}
+          {isSubmitting ? "添加中..." : "添加到社团"}
         </Button>
       </DialogFooter>
     </form>
-  )
+  );
 }
 
 // 编辑角色表单组件
@@ -1125,22 +1215,27 @@ function EditRoleForm({
   onSubmit,
   onCancel,
 }: {
-  currentRole: string
-  onSubmit: (role: 'admin' | 'candidate') => void
-  onCancel: () => void
+  currentRole: string;
+  onSubmit: (role: "admin" | "candidate") => void;
+  onCancel: () => void;
 }) {
-  const [selectedRole, setSelectedRole] = useState<'admin' | 'candidate'>(currentRole as any)
+  const [selectedRole, setSelectedRole] = useState<"admin" | "candidate">(
+    currentRole as any,
+  );
 
   const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    onSubmit(selectedRole)
-  }
+    e.preventDefault();
+    onSubmit(selectedRole);
+  };
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div>
         <Label htmlFor="new-role">新角色</Label>
-        <Select value={selectedRole} onValueChange={(value: any) => setSelectedRole(value)}>
+        <Select
+          value={selectedRole}
+          onValueChange={(value: any) => setSelectedRole(value)}
+        >
           <SelectTrigger>
             <SelectValue />
           </SelectTrigger>
@@ -1160,42 +1255,47 @@ function EditRoleForm({
         </Button>
       </DialogFooter>
     </form>
-  )
+  );
 }
 
 // 工具函数
 function getCategoryLabel(category: string): string {
   const categoryMap: { [key: string]: string } = {
-    '学术科技': '学术科技',
-    '体育竞技': '体育竞技', 
-    '文学艺术': '文学艺术',
-    '艺术文化': '艺术文化',
-    academic: '学术类',
-    sports: '体育类',
-    arts: '文艺类',
-    technology: '科技类',
-    volunteer: '志愿类',
-    other: '其他',
-  }
-  return categoryMap[category] || category
+    学术科技: "学术科技",
+    体育竞技: "体育竞技",
+    文学艺术: "文学艺术",
+    艺术文化: "艺术文化",
+    academic: "学术类",
+    sports: "体育类",
+    arts: "文艺类",
+    technology: "科技类",
+    volunteer: "志愿类",
+    other: "其他",
+  };
+  return categoryMap[category] || category;
 }
 
 export default function ClubManagementPage() {
   return (
     <ProtectedRoute permission="user_view">
-      <ClubManagementPageContent 
-        user={{ id: 'admin-1', name: '超级管理员', email: 'admin@example.com', role: 'system_admin' }} 
+      <ClubManagementPageContent
+        user={{
+          id: "admin-1",
+          name: "超级管理员",
+          email: "admin@example.com",
+          role: "system_admin",
+        }}
         logout={async () => {
           try {
-            const { logout: logoutStore } = useAppStore.getState()
-            await logoutStore()
-            window.location.href = '/login'
+            const { logout: logoutStore } = useAppStore.getState();
+            await logoutStore();
+            window.location.href = "/login";
           } catch (error) {
-            console.error('退出登录失败:', error)
-            window.location.href = '/login'
+            console.error("退出登录失败:", error);
+            window.location.href = "/login";
           }
         }}
       />
     </ProtectedRoute>
-  )
+  );
 }

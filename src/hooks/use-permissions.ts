@@ -1,7 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useAppStore } from "@/store";
-import { usersApi } from "@/lib/api";
-import type { Permission } from "@/lib/api";
+import { usersApi, rolesApi, permissionsApi } from "@/lib/api";
 
 /**
  * 权限检查 Hook
@@ -32,7 +31,7 @@ export function usePermissions() {
 
   // 从profile中提取权限代码数组
   const userPermissions =
-    (userProfile as any)?.permissions?.map((p: any) => p.code) ||
+    userProfile?.permissions?.map((p: { code: string }) => p.code) ||
     user?.permissions ||
     [];
 
@@ -275,6 +274,7 @@ interface MenuItem {
  */
 export function useMenuItems(currentPath: string = "/"): MenuItem[] {
   const { hasPermission, hasAnyPermission } = usePermissions();
+  const { user } = useAppStore();
 
   const allMenuItems: MenuItem[] = [
     {
@@ -361,8 +361,23 @@ export function useMenuItems(currentPath: string = "/"): MenuItem[] {
     },
   ];
 
+  // 获取用户角色
+  const userRole = user?.role || "candidate";
+
   // 根据权限过滤菜单项
   return allMenuItems.filter((item) => {
+    // 对于候选人角色，只显示特定的菜单项
+    if (userRole === "candidate") {
+      const candidateAllowedMenus = [
+        "仪表盘",
+        "个人信息",
+        "我的申请",
+        "招新信息",
+      ];
+      return candidateAllowedMenus.includes(item.title);
+    }
+
+    // 对于管理员角色，根据权限过滤
     if (!item.permission && !item.permissions) {
       return true; // 没有权限要求的菜单项总是显示
     }

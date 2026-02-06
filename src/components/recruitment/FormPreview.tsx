@@ -22,17 +22,9 @@ interface FormPreviewProps {
 export function FormPreview({ fields }: FormPreviewProps) {
   if (!fields || fields.length === 0) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <FileText className="h-5 w-5" />
-            表单预览
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-gray-500 text-center py-4">暂无必填字段配置</p>
-        </CardContent>
-      </Card>
+      <div className="text-gray-500 text-center py-4">
+        暂无必填字段配置
+      </div>
     )
   }
 
@@ -106,35 +98,25 @@ export function FormPreview({ fields }: FormPreviewProps) {
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <FileText className="h-5 w-5" />
-          表单预览
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className="space-y-4">
-          <p className="text-sm text-gray-500 mb-4">
-            以下是候选人需要填写的必填字段预览
-          </p>
-          {fields.map((field) => (
-            <div key={field.id} className="space-y-2">
-              <div className="flex items-center gap-2">
-                {getFieldIcon(field.fieldType)}
-                <Label htmlFor={field.fieldName} className="font-medium">
-                  {field.fieldLabel}
-                  {field.isRequired && <span className="text-red-500 ml-1">*</span>}
-                </Label>
-              </div>
-              {renderField(field)}
-              {field.helpText && (
-                <p className="text-xs text-gray-500 mt-1">{field.helpText}</p>
-              )}
-            </div>
-          ))}
+    <div className="space-y-4">
+      <p className="text-sm text-gray-500 mb-4">
+        以下是候选人需要填写的必填字段预览
+      </p>
+      {fields.map((field) => (
+        <div key={field.id} className="space-y-2">
+          <div className="flex items-center gap-2">
+            {getFieldIcon(field.fieldType)}
+            <Label htmlFor={field.fieldName} className="font-medium">
+              {field.fieldLabel}
+              {field.isRequired && <span className="text-red-500 ml-1">*</span>}
+            </Label>
+          </div>
+          {renderField(field)}
+          {field.helpText && (
+            <p className="text-xs text-gray-500 mt-1">{field.helpText}</p>
+          )}
         </div>
-      </CardContent>
-    </Card>
+      ))}
+    </div>
   )
 }

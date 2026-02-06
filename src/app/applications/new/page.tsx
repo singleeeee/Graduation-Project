@@ -60,7 +60,7 @@ export default function NewApplicationPage() {
 
   // 根据requiredFields筛选出需要的字段
   const requiredRegistrationFields = allRegistrationFields.filter((field: any) => 
-    recruitment?.requiredFields?.includes(field.id)
+    recruitment?.requiredFields?.includes(field.fieldName)
   )
 
   // 动态创建表单验证schema - 只基于requireField配置的字段

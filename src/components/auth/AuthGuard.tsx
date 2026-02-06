@@ -100,6 +100,13 @@ export function AuthGuard({
     }
   }, [requireGuest, authenticated, router]);
 
+  // 使用 useEffect 处理认证重定向，避免在渲染过程中更新 Router
+  useEffect(() => {
+    if (requireAuth && !authenticated) {
+      router.push("/login");
+    }
+  }, [requireAuth, authenticated, router]);
+
   // 如果正在加载，显示加载状态
   if (isLoading) {
     return (
@@ -110,12 +117,6 @@ export function AuthGuard({
         </div>
       </div>
     );
-  }
-
-  // 如果需要认证但未登录，重定向到登录页
-  if (requireAuth && !authenticated) {
-    router.push("/login");
-    return null;
   }
 
   if (requireGuest && authenticated) {

@@ -168,8 +168,9 @@ export function useRegistrationFieldsForSelection() {
       } else if (Array.isArray(data)) {
         fieldsArray = data;
       }
-      // 只返回isForRecruitment为true的字段
-      return fieldsArray.filter((field) => field.isForRecruitment);
+      // 返回所有字段，包括isForRecruitment为false的字段
+      // 这样可以确保招新批次的requiredFields中的所有字段都能被找到
+      return fieldsArray;
     },
   });
 }

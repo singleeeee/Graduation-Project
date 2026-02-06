@@ -1,42 +1,39 @@
-"use client"
+"use client";
 
-import { useEffect } from 'react'
-import { useRouter, usePathname } from 'next/navigation'
-import { DashboardLayout } from '@/components/layout/DashboardLayout'
-import { useMenuItems } from '@/hooks/use-permissions'
-import { logout } from '@/lib/auth'
-import { useAppStore } from '@/store'
+import { useEffect } from "react";
+import { useRouter, usePathname } from "next/navigation";
+import { DashboardLayout } from "@/components/layout/DashboardLayout";
+import { useMenuItems } from "@/hooks/use-permissions";
+import { logout } from "@/lib/auth";
+import { useAppStore } from "@/store";
+import { PermissionGuard } from "@/components/auth/PermissionGuard";
 
-export function AdminLayoutClient({
-  children,
-}: {
-  children: React.ReactNode
-}) {
-  const { user, isAuthenticated } = useAppStore()
-  const router = useRouter()
-  const currentPath = usePathname()
+export function AdminLayoutClient({ children }: { children: React.ReactNode }) {
+  const { user, isAuthenticated } = useAppStore();
+  const router = useRouter();
+  const currentPath = usePathname();
 
   // 如果用户未认证，重定向到登录页
   useEffect(() => {
     if (!isAuthenticated()) {
-      router.replace('/login')
+      router.replace("/login");
     }
-  }, [isAuthenticated, router])
+  }, [isAuthenticated, router]);
 
-  const menuItems = useMenuItems(currentPath)
-  
+  const menuItems = useMenuItems(currentPath);
+
   const handleLogout = async () => {
     try {
       // 使用完整的退出流程
-      await logout()
+      await logout();
       // 退出后重定向到登录页
-      router.replace('/login')
+      router.replace("/login");
     } catch (error) {
-      console.error('退出登录失败:', error)
+      console.error("退出登录失败:", error);
       // 即使失败也重定向到登录页
-      router.replace('/login')
+      router.replace("/login");
     }
-  }
+  };
 
   // 如果未认证，显示加载状态
   if (!isAuthenticated()) {
@@ -47,18 +44,28 @@ export function AdminLayoutClient({
           <p className="mt-4 text-gray-600">正在跳转到登录页...</p>
         </div>
       </div>
-    )
+    );
   }
 
   return (
-    <DashboardLayout
-      user={user}
-      logout={handleLogout}
-      menuItems={menuItems}
-      title="超级管理员后台"
-      theme="admin"
+    <PermissionGuard
+      requiredRoles={[
+        "admin",
+        "super_admin",
+        "system_admin",
+        "club_admin",
+        "interviewer",
+      ]}
     >
-      {children}
-    </DashboardLayout>
-  )
+      <DashboardLayout
+        user={user}
+        logout={handleLogout}
+        menuItems={menuItems}
+        title="超级管理员后台"
+        theme="admin"
+      >
+        {children}
+      </DashboardLayout>
+    </PermissionGuard>
+  );
 }
