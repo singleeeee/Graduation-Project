@@ -340,13 +340,6 @@ export function useMenuItems(currentPath: string = "/"): MenuItem[] {
       permission: "application_review",
     },
     {
-      title: "面试安排",
-      icon: "📅",
-      href: "/interview",
-      current: currentPath.startsWith("/interview"),
-      permission: "interview_manage",
-    },
-    {
       title: "个人信息",
       icon: "👤",
       href: "/profile",
