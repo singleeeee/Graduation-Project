@@ -61,8 +61,14 @@ class AxiosService {
       async (error: AxiosError) => {
         const originalRequest = error.config as AxiosRequestConfig & { _retry?: boolean }
         
-        // 如果是 401 错误且不是重试请求，尝试刷新令牌
-        if (error.response?.status === 401 && !originalRequest._retry) {
+        // 认证相关接口本身（登录、注册、刷新token）发生 401 时，直接返回错误，不触发 token 刷新
+        const requestUrl = originalRequest.url || ''
+        const isAuthEndpoint = ['/auth/login', '/auth/register', '/auth/refresh'].some(
+          (path) => requestUrl.includes(path)
+        )
+
+        // 如果是 401 错误且不是重试请求且不是认证接口，尝试刷新令牌
+        if (error.response?.status === 401 && !originalRequest._retry && !isAuthEndpoint) {
           if (this.isRefreshing) {
             // 如果正在刷新令牌，将请求加入队列
             return new Promise((resolve, reject) => {
@@ -179,24 +185,37 @@ class AxiosService {
     return response.data.data
   }
 
-  private handleError(error: AxiosError): Error {
+  private handleError(error: AxiosError): Error & { isApiError?: boolean; statusCode?: number } {
+    let err: Error & { isApiError?: boolean; statusCode?: number }
     if (error.response) {
       // 服务器返回了错误响应
       const data = error.response.data as any
-      return new Error(data?.message || `服务器错误: ${error.response.status}`)
+      err = new Error(data?.message || `服务器错误: ${error.response.status}`)
+      err.statusCode = error.response.status
     } else if (error.request) {
       // 请求发出但没有收到响应
-      return new Error('网络连接失败，请检查网络设置')
+      err = new Error('网络连接失败，请检查网络设置')
     } else {
       // 请求配置出错
-      return new Error(error.message || '请求配置错误')
+      err = new Error(error.message || '请求配置错误')
     }
+    // 标记为 API 错误，供全局错误处理器识别并跳过，避免重复处理
+    err.isApiError = true
+    return err
   }
 
   private notifyClientError(error: any): void {
     // 只在浏览器环境中发送事件
     if (typeof window !== 'undefined') {
       try {
+        const status = error?.response?.status
+
+        // 4xx 错误（401 除外的认证类）属于业务级错误，交由调用方（React Query / mutation）处理
+        // 只有 5xx 服务器错误和网络错误才全局广播，避免与页面自身错误处理重复弹窗
+        if (status && status >= 400 && status < 500) {
+          return
+        }
+
         const errorMessage = globalErrorHandler.extractErrorMessage(error)
         
         // 发送自定义事件到客户端
@@ -216,24 +235,36 @@ class AxiosService {
   }
 
   // 公共方法
-  public async get<T = any>(url: string, config?: AxiosRequestConfig): Promise<T> {
-    return this.instance.get(url, config)
+  // 注意：通过 .then(v => v, e => Promise.reject(e)) 确保 rejection 在同一微任务里
+  // 就有处理者附着，避免在 await 捕获之前触发 Next.js dev overlay 的 unhandledrejection 监听
+
+  private static wrapRequest<T>(promise: Promise<T>): Promise<T> {
+    // 附加一个透传的 rejection handler，使 Promise 在当前微任务就有处理者
+    // 这样 Next.js 的 unhandledrejection 监听器不会提前捕获到它
+    return promise.then(
+      (v) => v,
+      (e) => Promise.reject(e)
+    )
   }
 
-  public async post<T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<T> {
-    return this.instance.post(url, data, config)
+  public get<T = any>(url: string, config?: AxiosRequestConfig): Promise<T> {
+    return AxiosService.wrapRequest(this.instance.get(url, config))
   }
 
-  public async put<T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<T> {
-    return this.instance.put(url, data, config)
+  public post<T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<T> {
+    return AxiosService.wrapRequest(this.instance.post(url, data, config))
   }
 
-  public async delete<T = any>(url: string, config?: AxiosRequestConfig): Promise<T> {
-    return this.instance.delete(url, config)
+  public put<T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<T> {
+    return AxiosService.wrapRequest(this.instance.put(url, data, config))
   }
 
-  public async patch<T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<T> {
-    return this.instance.patch(url, data, config)
+  public delete<T = any>(url: string, config?: AxiosRequestConfig): Promise<T> {
+    return AxiosService.wrapRequest(this.instance.delete(url, config))
+  }
+
+  public patch<T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<T> {
+    return AxiosService.wrapRequest(this.instance.patch(url, data, config))
   }
 
   // Token 管理方法

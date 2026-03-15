@@ -1,37 +1,69 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useAppStore } from "@/store";
-import { isAuthenticated } from "@/lib/auth";
-import { AuthGuard } from "@/components/auth/AuthGuard";
+import { logout as authLogout, initializeAuth } from "@/lib/auth";
 import { AdminDashboard } from "@/components/dashboard/AdminDashboard";
 import { CandidateDashboard } from "@/components/dashboard/CandidateDashboard";
 import WelcomePage from "@/components/pages/WelcomePage";
+import { Loader2 } from "lucide-react";
 
 export default function Home() {
-  const { user, logout } = useAppStore();
+  const router = useRouter();
+  const { user } = useAppStore();
+  // 用响应式 state 追踪认证状态，避免静态 if 判断
+  const [authStatus, setAuthStatus] = useState<"loading" | "authenticated" | "unauthenticated">("loading");
 
-  // 检查用户是否已认证，如果已认证则显示对应仪表盘
-  if (isAuthenticated()) {
-    // 根据用户角色显示不同页面（注意：如果用户信息不完整，使用默认角色）
-    const userRole = user.role || "candidate";
+  useEffect(() => {
+    let isMounted = true;
+    const check = async () => {
+      const result = await initializeAuth();
+      if (isMounted) {
+        setAuthStatus(result ? "authenticated" : "unauthenticated");
+      }
+    };
+    check();
+    return () => { isMounted = false; };
+  }, []);
 
-    if (userRole === "candidate") {
-      return (
-        <AuthGuard requireAuth>
-          <CandidateDashboard user={user} logout={logout} />
-        </AuthGuard>
-      );
-    }
+  const handleLogout = async () => {
+    await authLogout();
+    setAuthStatus("unauthenticated");
+    router.replace("/login");
+  };
 
-    // 管理员页面
+  if (authStatus === "loading") {
     return (
-      <AuthGuard requireAuth>
-        <AdminDashboard user={user} logout={logout} />
-      </AuthGuard>
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
+        <div className="flex flex-col items-center space-y-2">
+          <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+          <span className="text-sm text-gray-600">加载中...</span>
+        </div>
+      </div>
     );
   }
 
-  // 未认证用户显示欢迎页面
-  return <WelcomePage />;
+  if (authStatus === "unauthenticated") {
+    return <WelcomePage />;
+  }
+
+  // 已认证，根据角色展示对应页面
+  const roleCode =
+    user.roleCode ||
+    (typeof user.role === "object" && user.role?.code) ||
+    (typeof user.role === "string" && user.role) ||
+    null;
+
+  const isAdmin =
+    roleCode === "super_admin" ||
+    roleCode === "admin" ||
+    roleCode === "system_admin" ||
+    roleCode === "club_admin";
+
+  if (isAdmin) {
+    return <AdminDashboard user={user} logout={handleLogout} />;
+  }
+
+  return <CandidateDashboard user={user} logout={handleLogout} />;
 }

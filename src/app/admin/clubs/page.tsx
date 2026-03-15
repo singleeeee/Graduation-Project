@@ -273,9 +273,9 @@ function ClubManagementPageContent({
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-500">总成员数</p>
+                <p className="text-sm font-medium text-gray-500">总管理员数</p>
                 <p className="text-2xl font-bold">
-                  {clubs.reduce((sum, club) => sum + club.adminCount, 0)}
+                  {clubs.reduce((sum, club) => sum + (club.adminCount || 0), 0)}
                 </p>
               </div>
               <Users className="w-8 h-8 text-green-500" />
@@ -286,9 +286,9 @@ function ClubManagementPageContent({
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-500">总管理员</p>
+                <p className="text-sm font-medium text-gray-500">总招新批次</p>
                 <p className="text-2xl font-bold">
-                  {clubs.reduce((sum, club) => sum + club.adminCount, 0)}
+                  {clubs.reduce((sum, club) => sum + (club.recruitmentCount || 0), 0)}
                 </p>
               </div>
               <Settings className="w-8 h-8 text-purple-500" />
@@ -354,8 +354,8 @@ function ClubManagementPageContent({
                 <TableHead>社团信息</TableHead>
                 <TableHead>分类</TableHead>
                 <TableHead>状态</TableHead>
-                <TableHead>成员数</TableHead>
-                <TableHead>管理员数</TableHead>
+<TableHead>管理员数</TableHead>
+<TableHead>招新批次</TableHead>
                 <TableHead>创建时间</TableHead>
                 <TableHead>操作</TableHead>
               </TableRow>
@@ -407,8 +407,8 @@ function ClubManagementPageContent({
                         {club.isActive ? "活跃" : "非活跃"}
                       </Badge>
                     </TableCell>
-                    <TableCell>{club.candidateCount}</TableCell>
-                    <TableCell>{club.adminCount}</TableCell>
+<TableCell>{club.adminCount ?? 0}</TableCell>
+<TableCell>{club.recruitmentCount ?? 0}</TableCell>
                     <TableCell>
                       {new Date(club.createdAt).toLocaleDateString()}
                     </TableCell>

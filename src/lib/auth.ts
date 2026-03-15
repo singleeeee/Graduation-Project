@@ -60,19 +60,16 @@ export async function loginAndSetUser(email: string, password: string) {
 export async function logout() {
   try {
     await authApi.logout()
-    
-    // 清除 Zustand store 中的用户数据
-    const { logout: logoutStore } = useAppStore.getState()
-    logoutStore()
-    
-    return true
   } catch (error) {
-    console.error('登出失败:', error)
-    // 即使 API 调用失败，也要清除本地状态
+    console.error('登出API调用失败，仍然清除本地状态:', error)
+    // 即使 API 调用失败，也要确保清除本地 token
+    authApi.clearAuth()
+  } finally {
+    // 无论成功或失败，始终清除 Zustand store 中的用户数据
     const { logout: logoutStore } = useAppStore.getState()
     logoutStore()
-    throw error
   }
+  return true
 }
 
 /**

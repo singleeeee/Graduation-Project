@@ -30,28 +30,26 @@ export function ErrorProvider({ children }: ErrorProviderProps) {
   const { reset } = useQueryErrorResetBoundary()
   
   useEffect(() => {
-    // 全局错误处理：监听window上的错误事件
+    // 全局错误处理：监听window上的错误事件（仅处理非 API 的运行时错误）
     const handleError = (event: ErrorEvent) => {
-      console.error('Global error:', event.error)
-      // 只显示非API相关的错误
       if (event.error && !event.error.isApiError) {
         errorHandler.showError(event.error, '应用发生错误')
       }
     }
     
     const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
-      console.error('Unhandled promise rejection:', event.reason)
-      // 只显示非API相关的错误
       const error = event.reason
-      if (error && !error.isApiError) {
-        errorHandler.showError(error, '异步操作发生错误')
-      }
+      // 跳过 API 错误（已由 axios 拦截器或 React Query onError 处理）
+      // 跳过普通的 Error 对象（登录/请求失败等业务错误，已由各自页面处理）
+      if (!error || error.isApiError) return
+      // 只处理非 HTTP 响应类的真正未捕获异常
+      if (error?.response) return
+      errorHandler.showError(error, '异步操作发生错误')
     }
     
-    // API错误处理：监听来自axios拦截器的错误事件
+    // API错误处理：监听来自axios拦截器的错误事件（仅 5xx 和网络错误）
     const handleApiError = (event: CustomEvent) => {
       const { message } = event.detail
-      console.error('API Error detected:', message)
       errorHandler.showError({ message }, message)
     }
     

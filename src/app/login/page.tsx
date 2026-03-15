@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { loginSchema, type LoginFormData } from "@/lib/utils/validations";
@@ -13,13 +14,12 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useAppStore } from "@/store";
 import { useMutation } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { loginAndSetUser, isAuthenticated } from "@/lib/auth";
-import { AlertCircle } from "lucide-react";
 import { AuthGuard } from "@/components/auth/AuthGuard";
+import { toast } from "sonner";
 
 export default function LoginPage() {
   const { setUser } = useAppStore();
@@ -35,14 +35,20 @@ export default function LoginPage() {
 
   const loginMutation = useMutation({
     mutationFn: async (data: LoginFormData) => {
-      const userData = await loginAndSetUser(data.email, data.password);
-      return userData;
+      // 在 mutationFn 内部捕获错误，避免 rejected Promise 触发 Next.js dev overlay
+      try {
+        return await loginAndSetUser(data.email, data.password);
+      } catch (err: any) {
+        // 将错误包装成 resolved 值传给 onSuccess，避免 unhandledrejection 事件
+        return { __error: true, message: err?.message || "请检查您的邮箱和密码" } as any;
+      }
     },
-    onSuccess: (userData) => {
+    onSuccess: (result: any) => {
+      if (result?.__error) {
+        toast.error("登录失败", { description: result.message });
+        return;
+      }
       router.push("/");
-    },
-    onError: (error) => {
-      console.error("loginMutation: 登录失败，请检查邮箱和密码:", error);
     },
   });
 
@@ -68,15 +74,6 @@ export default function LoginPage() {
             </CardHeader>
             <CardContent>
               <div className="space-y-6">
-                {loginMutation.error && (
-                  <Alert variant="destructive">
-                    <AlertCircle className="h-4 w-4" />
-                    <AlertDescription>
-                      登录失败，请检查您的邮箱和密码
-                    </AlertDescription>
-                  </Alert>
-                )}
-
                 <div className="space-y-4">
                   <form onSubmit={handleSubmit(onSubmit)}>
                     <div className="space-y-2">
@@ -127,19 +124,19 @@ export default function LoginPage() {
                     >
                       {loginMutation.isPending ? "登录中..." : "登录"}
                     </Button>
-                  </form>
 
-                  <div className="text-center mt-4">
-                    <p className="text-gray-600">
-                      还没有账号？{" "}
-                      <a
-                        href="/register"
-                        className="text-blue-600 hover:text-blue-800 font-medium"
-                      >
-                        注册一个
-                      </a>
-                    </p>
-                  </div>
+                    <div className="mt-6 text-center">
+                      <p className="text-sm text-gray-600">
+                        还没有账号？{' '}
+                        <Link
+                          href="/register"
+                          className="font-medium text-blue-600 hover:text-blue-500 transition-colors"
+                        >
+                          立即注册
+                        </Link>
+                      </p>
+                    </div>
+                  </form>
                 </div>
               </div>
             </CardContent>

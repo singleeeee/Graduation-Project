@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
-import { Textarea } from '@/components/ui/textarea' // Re-use the Textarea component
+import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import {
   Select,
@@ -13,34 +13,37 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select' // Import Select components
-import { Checkbox } from '@/components/ui/checkbox' // Import Checkbox component
-import { useForm } from 'react-hook-form'
+} from '@/components/ui/select'
+import { Checkbox } from '@/components/ui/checkbox'
+import { useForm, useFieldArray } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
 import { useCreateRecruitmentBatch, useClubsForSelection, useRegistrationFieldsForSelection } from '@/hooks/use-recruitment'
 import type { CreateRecruitmentBatchRequest, Club, RegistrationField } from '@/lib/api'
-import { toast } from 'sonner' // Assuming you have a toast library for notifications, if not, use alert or similar
+import { toast } from 'sonner'
+import { Plus, Trash2 } from 'lucide-react'
 
 // Zod schema for form validation
 const createBatchSchema = z.object({
   title: z.string().min(1, '标题是必填项'),
   clubId: z.string().min(1, '社团ID是必填项'),
   description: z.string().min(1, '描述是必填项'),
-  startTime: z.string().min(1, '开始时间是必填项'), // HTML5 date input returns string
-  endTime: z.string().min(1, '结束时间是必填项'), // HTML5 date input returns string
+  startTime: z.string().min(1, '开始时间是必填项'),
+  endTime: z.string().min(1, '结束时间是必填项'),
   maxApplicants: z.number().int().positive('最大申请人数必须是正整数'),
-  requiredFields: z.array(z.string()).optional(), // Now an actual array of strings
+  requiredFields: z.array(z.string()).optional(),
   customQuestions: z.array(
     z.object({
-      id: z.string(),
-      question: z.string(),
-      type: z.string(),
+      id: z.string().optional(),
+      question: z.string().min(1, '问题内容不能为空'),
+      type: z.enum(['text', 'textarea', 'select', 'radio', 'checkbox']),
       required: z.boolean(),
-      options: z.array(z.string()).optional()
+      options: z.array(z.string()).optional(),
     })
-  ).optional() // For now, this will be an empty array, to be implemented later
+  ).optional(),
 })
+
+type FormData = z.infer<typeof createBatchSchema>
 
 export default function NewRecruitmentBatchPage() {
   const router = useRouter()
@@ -50,7 +53,15 @@ export default function NewRecruitmentBatchPage() {
   const { data: clubs = [], isLoading: isClubsLoading, error: clubsError } = useClubsForSelection()
   const { data: registrationFields = [], isLoading: isFieldsLoading, error: fieldsError } = useRegistrationFieldsForSelection()
 
-  const { register, handleSubmit, formState: { errors }, watch, setValue, getValues } = useForm<CreateRecruitmentBatchRequest>({
+  const {
+    register,
+    handleSubmit,
+    control,
+    formState: { errors },
+    watch,
+    setValue,
+    getValues,
+  } = useForm<FormData>({
     resolver: zodResolver(createBatchSchema),
     defaultValues: {
       title: '',
@@ -58,19 +69,20 @@ export default function NewRecruitmentBatchPage() {
       description: '',
       startTime: '',
       endTime: '',
-      maxApplicants: 0,
-      requiredFields: [], // Initialize as empty, let admin select from checkboxes
-      customQuestions: [] // Initialize as empty, add UI to manage later
+      maxApplicants: 1,
+      requiredFields: [],
+      customQuestions: [],
     }
   })
 
-  // Watch for changes to the requiredFields field to ensure UI updates correctly
-  const watchedRequiredFields = watch('requiredFields') || []
+  // 自定义问题的 fieldArray
+  const { fields: questionFields, append: appendQuestion, remove: removeQuestion } = useFieldArray({
+    control,
+    name: 'customQuestions',
+  })
 
-  // Debug: Log watchedRequiredFields to see what's actually being stored
-  React.useEffect(() => {
-    console.log('watchedRequiredFields changed:', watchedRequiredFields)
-  }, [watchedRequiredFields])
+  const watchedRequiredFields = watch('requiredFields') || []
+  const watchedClubId = watch('clubId')
 
   // Function to handle checkbox changes for requiredFields
   const handleFieldCheckboxChange = (fieldId: string, checked: boolean) => {
@@ -85,25 +97,44 @@ export default function NewRecruitmentBatchPage() {
     setValue('requiredFields', updatedFields)
   }
 
-  const onSubmit = async (data: CreateRecruitmentBatchRequest) => {
-    console.log('Form submission data:', data)
-    // The 'requiredFields' is already an array of strings from the UI, no need for further processing.
-    // For simplicity, customQuestions is an empty array for now.
+  // 添加新问题
+  const handleAddQuestion = () => {
+    appendQuestion({
+      question: '',
+      type: 'text',
+      required: false,
+      options: [],
+    })
+  }
+
+  const onSubmit = async (data: FormData) => {
     const processedData: CreateRecruitmentBatchRequest = {
       ...data,
       requiredFields: data.requiredFields || [],
-      customQuestions: []
+      customQuestions: (data.customQuestions || []).map(q => ({
+        id: q.id || '',
+        question: q.question,
+        type: q.type,
+        required: q.required,
+        options: q.options || [],
+      })),
     }
-    console.log('Processed data for API:', processedData)
 
     try {
       await createBatchMutation.mutateAsync(processedData)
       toast.success('招新批次创建成功！')
-      router.push('/admin/recruitment') // Redirect back to the recruitment list
-    } catch (error) {
-      console.error('创建招新批次失败:', error)
-      toast.error('创建招新批次失败，请重试。')
+      router.push('/admin/recruitment')
+    } catch (error: any) {
+      const errorMessage = error?.message || '未知错误'
+      toast.error('创建招新批次失败', { description: errorMessage })
     }
+  }
+
+  const onInvalid = (errors: any) => {
+    const firstError = Object.entries(errors)[0]
+    const fieldName = firstError?.[0]
+    const message = (firstError?.[1] as any)?.message || '格式不正确'
+    toast.error('表单验证失败', { description: `字段「${fieldName}」: ${message}` })
   }
 
   return (
@@ -120,7 +151,7 @@ export default function NewRecruitmentBatchPage() {
           <CardTitle>基本信息</CardTitle>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+          <form onSubmit={handleSubmit(onSubmit, onInvalid)} className="space-y-4">
             <div>
               <Label htmlFor="title">批次标题</Label>
               <Input id="title" {...register('title')} />
@@ -132,16 +163,19 @@ export default function NewRecruitmentBatchPage() {
               {isClubsLoading ? (
                 <p>加载社团列表中...</p>
               ) : clubsError ? (
-                <p className="text-red-500">加载社团失败: {clubsError.message}</p>
+                <p className="text-red-500">加载社团失败: {(clubsError as Error).message}</p>
               ) : (
-                <Select onValueChange={(value) => setValue('clubId', value)} defaultValue={getValues('clubId')}>
+                <Select
+                  value={watchedClubId || ''}
+                  onValueChange={(value) => setValue('clubId', value, { shouldValidate: true })}
+                >
                   <SelectTrigger>
                     <SelectValue placeholder="请选择社团" />
                   </SelectTrigger>
                   <SelectContent>
                     {clubs.map((club: Club) => (
                       <SelectItem key={club.id} value={club.id}>
-                        {club.name} {/* Assuming Club type has a 'name' property */}
+                        {club.name}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -180,7 +214,7 @@ export default function NewRecruitmentBatchPage() {
               {isFieldsLoading ? (
                 <p>加载必填字段列表中...</p>
               ) : fieldsError ? (
-                <p className="text-red-500">加载必填字段列表失败: {fieldsError.message}</p>
+                <p className="text-red-500">加载必填字段列表失败: {(fieldsError as Error).message}</p>
               ) : (
                 <div className="mt-2 space-y-2 border rounded-md p-3 bg-gray-50">
                   {registrationFields.length === 0 ? (
@@ -189,15 +223,14 @@ export default function NewRecruitmentBatchPage() {
                     registrationFields.map((field: RegistrationField) => (
                       <div key={field.id} className="flex items-center">
                         <Checkbox
-                          id={`field-${field.id}`}
-                          checked={watchedRequiredFields.includes(field.id!)}
+                          id={`field-${field.fieldName}`}
+                          checked={watchedRequiredFields.includes(field.fieldName!)}
                           onCheckedChange={(checked: boolean) =>
-                            handleFieldCheckboxChange(field.id!, checked)
+                            handleFieldCheckboxChange(field.fieldName!, checked)
                           }
                         />
-                        <Label htmlFor={`field-${field.id}`} className="ml-2 text-sm cursor-pointer">
-                          {field.fieldLabel || field.fieldName} {/* Display the user-friendly field label or fallback */}
-                          {/* Assuming 'name' field is still important, keep the asterisk for it */}
+                        <Label htmlFor={`field-${field.fieldName}`} className="ml-2 text-sm cursor-pointer">
+                          {field.fieldLabel || field.fieldName}
                           {field.fieldName === 'name' && <span className="text-red-500 ml-1">*</span>}
                         </Label>
                       </div>
@@ -208,13 +241,114 @@ export default function NewRecruitmentBatchPage() {
               {errors.requiredFields && <p className="text-red-500 text-sm mt-1">{errors.requiredFields.message}</p>}
             </div>
 
-            {/* Custom Questions section - placeholder for now */}
+            {/* 自定义问题模块 */}
             <div>
-              <Label>自定义问题</Label>
-              <p className="text-gray-500 text-sm mt-1">
-                （此部分将在后续迭代中完善动态问题添加功能）
-              </p>
-              {/* Placeholder for future dynamic custom questions UI */}
+              <div className="flex items-center justify-between mb-2">
+                <Label>自定义问题</Label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleAddQuestion}
+                  className="flex items-center gap-1"
+                >
+                  <Plus className="h-4 w-4" />
+                  添加问题
+                </Button>
+              </div>
+
+              {questionFields.length === 0 ? (
+                <div className="border rounded-md p-4 bg-gray-50 text-center text-gray-500 text-sm">
+                  暂无自定义问题，点击右上角"添加问题"按钮添加
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {questionFields.map((field, index) => (
+                    <div
+                      key={field.id}
+                      className="border rounded-md p-4 bg-gray-50 space-y-3"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium text-gray-700">
+                          问题 {index + 1}
+                        </span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => removeQuestion(index)}
+                          className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+
+                      <div>
+                        <Label htmlFor={`q-content-${index}`} className="text-sm">
+                          问题内容
+                        </Label>
+                        <Input
+                          id={`q-content-${index}`}
+                          {...register(`customQuestions.${index}.question`)}
+                          placeholder="请输入问题内容..."
+                          className="mt-1"
+                        />
+                        {errors.customQuestions?.[index]?.question && (
+                          <p className="text-red-500 text-xs mt-1">
+                            {errors.customQuestions[index]?.question?.message}
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <Label htmlFor={`q-type-${index}`} className="text-sm">
+                            问题类型
+                          </Label>
+                          <Select
+                            value={watch(`customQuestions.${index}.type`) || 'text'}
+                            onValueChange={(value) =>
+                              setValue(
+                                `customQuestions.${index}.type`,
+                                value as 'text' | 'textarea' | 'select' | 'radio' | 'checkbox',
+                              )
+                            }
+                          >
+                            <SelectTrigger className="mt-1">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="text">单行文本</SelectItem>
+                              <SelectItem value="textarea">多行文本</SelectItem>
+                              <SelectItem value="select">下拉选择</SelectItem>
+                              <SelectItem value="radio">单选</SelectItem>
+                              <SelectItem value="checkbox">多选</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        <div className="flex items-end pb-1">
+                          <div className="flex items-center gap-2">
+                            <Checkbox
+                              id={`q-required-${index}`}
+                              checked={watch(`customQuestions.${index}.required`) || false}
+                              onCheckedChange={(checked: boolean) =>
+                                setValue(`customQuestions.${index}.required`, checked)
+                              }
+                            />
+                            <Label
+                              htmlFor={`q-required-${index}`}
+                              className="text-sm cursor-pointer"
+                            >
+                              必填
+                            </Label>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div className="flex justify-end space-x-2 pt-4">

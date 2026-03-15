@@ -128,17 +128,16 @@ export function useClubsForSelection() {
     queryFn: async () => {
       try {
         const { clubsApi } = require("@/lib/api");
-        // 获取所有活跃的社团，用于下拉选择
-        const result = await clubsApi.getClubs({ isActive: true, limit: 100 });
-        console.log("Clubs API result:", result);
+        // 获取所有社团（不过滤 isActive），用于下拉选择回显
+        const result = await clubsApi.getClubs({ limit: 100 });
         return result;
       } catch (error) {
         console.error("Failed to fetch clubs:", error);
         return { data: [] };
       }
     },
-    select: (data) => {
-      console.log("Clubs selection data:", data);
+    select: (data: any) => {
+      // clubsApi.getClubs 已经规范化返回 ClubListResponse { data: Club[] }
       return data?.data || [];
     },
   });

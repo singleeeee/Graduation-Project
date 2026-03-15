@@ -1,46 +1,29 @@
 "use client"
 
-import { useEffect } from 'react'
-import { toast } from './use-toast'
+import { toast } from 'sonner'
 import { globalErrorHandler } from '@/lib/utils/error-handler'
 
 export function useErrorHandler() {
   return {
     showError: (error: any, customMessage?: string) => {
       const errorMessage = globalErrorHandler.handleApiError(error, customMessage)
-      toast({
-        title: '错误',
-        description: errorMessage,
-        variant: 'destructive',
-      })
+      toast.error('错误', { description: errorMessage })
     },
     showMessage: (title: string, description: string, variant: 'default' | 'destructive' = 'default') => {
-      toast({
-        title,
-        description,
-        variant,
-      })
+      if (variant === 'destructive') {
+        toast.error(title, { description })
+      } else {
+        toast(title, { description })
+      }
     },
     showSuccess: (description: string, title: string = '成功') => {
-      toast({
-        title,
-        description,
-        variant: 'default',
-      })
+      toast.success(title, { description })
     },
     showWarning: (description: string, title: string = '警告') => {
-      toast({
-        title,
-        description,
-        variant: 'default',
-      })
+      toast.warning(title, { description })
     },
     showInfo: (description: string, title: string = '提示') => {
-      toast({
-        title,
-        description,
-        variant: 'default',
-      })
+      toast.info(title, { description })
     }
   }
 }

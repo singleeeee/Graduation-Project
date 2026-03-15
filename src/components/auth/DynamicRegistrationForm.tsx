@@ -3,7 +3,7 @@ import { useForm, useFormContext, Controller, FormProvider } from 'react-hook-fo
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useQuery } from '@tanstack/react-query'
-import { useToast } from '@/hooks/use-toast'
+import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -305,8 +305,6 @@ interface DynamicRegistrationFormProps {
 }
 
 export function DynamicRegistrationForm({ onSubmit, isSubmitting = false }: DynamicRegistrationFormProps) {
-  const { toast } = useToast()
-
   // 获取动态字段配置
   const { data: dynamicFields = [], isLoading, error } = useQuery({
     queryKey: ['registrationFields', 'active'],
@@ -319,13 +317,9 @@ export function DynamicRegistrationForm({ onSubmit, isSubmitting = false }: Dyna
   // 处理错误
   React.useEffect(() => {
     if (error) {
-      toast({
-        title: '加载失败',
-        description: '无法加载注册字段配置，请刷新页面重试',
-        variant: 'destructive',
-      })
+      toast.error('加载失败', { description: '无法加载注册字段配置，请刷新页面重试' })
     }
-  }, [error, toast])
+  }, [error])
 
   // 按fieldOrder排序字段，并过滤出isForRegister为true的字段
   const sortedFields = React.useMemo(() => {

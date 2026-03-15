@@ -9,6 +9,7 @@ import { authApi } from '@/lib/api'
 import { useAppStore } from '@/store'
 import { useState } from 'react'
 import { DynamicRegistrationForm } from '@/components/auth/DynamicRegistrationForm'
+import { toast } from 'sonner'
 
 export default function RegisterPage() {
   const router = useRouter()
@@ -31,7 +32,6 @@ export default function RegisterPage() {
       return response
     },
     onSuccess: (response) => {
-      console.log('注册响应:', response)
       let loginData = response
       
       const apiResponse = response as any
@@ -42,18 +42,20 @@ export default function RegisterPage() {
       if (loginData.user) {
         setUser(loginData.user)
         if (loginData.accessToken) {
-          localStorage.setItem('token', loginData.accessToken)
+          localStorage.setItem('access_token', loginData.accessToken)
         }
+        toast.success('注册成功！即将跳转...')
         setShowSuccessAlert(true)
         setTimeout(() => {
           router.push('/')
         }, 1500)
       } else {
-        console.error('注册成功但用户数据不完整:', loginData)
+        toast.error('注册失败', { description: '用户数据不完整，请重试' })
       }
     },
-    onError: (error) => {
-      console.error('注册失败详细错误:', error)
+    onError: (error: any) => {
+      const message = error?.response?.data?.message || error?.message || '注册失败，请重试'
+      toast.error('注册失败', { description: message })
     }
   })
 

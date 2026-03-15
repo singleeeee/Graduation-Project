@@ -400,33 +400,41 @@ function ProfileFieldsForm() {
   const updateProfileFields = useUpdateProfileFields();
 
   const [formValues, setFormValues] = useState<ProfileFieldFormData>({});
+  // 用 ref 追踪是否已完成初始化，避免 fieldsConfig 引用变化导致无限循环
+  const initializedRef = React.useRef(false);
 
-  // 初始化表单值
+  // 初始化表单值：profile 和 fieldsConfig 都加载完成后只初始化一次
   useEffect(() => {
-    if (profile) {
-      const initialValues: ProfileFieldFormData = {};
+    // 已初始化过则跳过（除非 profile 数据本身发生变化，通过 profile.id 判断）
+    if (!profile || initializedRef.current) return;
+    // fieldsConfig 还在加载中时等待
+    if (configLoading) return;
 
-      // 首先处理字段配置中的字段
-      if (fieldsConfig.fields.length > 0) {
-        fieldsConfig.fields.forEach((field) => {
-          // 优先使用字段的currentValue，其次使用profile中的对应字段
-          const value =
-            field.currentValue ||
-            profile.profileFields?.[field.fieldName] ||
-            (profile as any)[field.fieldName] ||
-            "";
-          initialValues[field.fieldName] = value;
-        });
-      } else if (profile.profileFields) {
-        // 如果没有字段配置，根据profileFields字段动态生成
-        Object.entries(profile.profileFields).forEach(([key, value]) => {
-          initialValues[key] = value as string;
-        });
-      }
+    const initialValues: ProfileFieldFormData = {};
 
-      setFormValues(initialValues);
+    // 首先处理字段配置中的字段
+    if (fieldsConfig.fields.length > 0) {
+      fieldsConfig.fields.forEach((field) => {
+        // 优先使用字段的currentValue，其次使用profile中的对应字段
+        const value =
+          field.currentValue ||
+          profile.profileFields?.[field.fieldName] ||
+          (profile as any)[field.fieldName] ||
+          "";
+        initialValues[field.fieldName] = value;
+      });
+    } else if (profile.profileFields) {
+      // 如果没有字段配置，根据profileFields字段动态生成
+      Object.entries(profile.profileFields).forEach(([key, value]) => {
+        initialValues[key] = value as string;
+      });
     }
-  }, [profile, fieldsConfig, updateProfileFields.isSuccess]);
+
+    setFormValues(initialValues);
+    initializedRef.current = true;
+  // 只依赖稳定的 id/loading 标志，避免对象引用变化触发无限循环
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [(profile as any)?.id, configLoading]);
 
   const handleFieldChange = (fieldName: string, value: string) => {
     setFormValues((prev) => ({
@@ -457,49 +465,43 @@ function ProfileFieldsForm() {
     );
   }
 
-  // 准备要显示的字段
-  const fieldsToDisplay = [];
+  // 准备要显示的字段：以 fieldsConfig.fields 为主，回填 profileFields 已有的值
+  const fieldsToDisplay: (ProfileFieldConfig & { currentValue: string })[] = [];
 
-  // 确保只显示profile.profileFields中存在的字段
-  if (profile?.profileFields) {
-    const profileFieldKeys = Object.keys(profile.profileFields);
-
-    // 首先从字段配置中查找对应的字段
-    if (fieldsConfig.fields.length > 0) {
-      fieldsConfig.fields.forEach((field) => {
-        if (profileFieldKeys.includes(field.fieldName)) {
-          fieldsToDisplay.push({
-            ...field,
-            currentValue: profile.profileFields[field.fieldName] as string,
-          });
-        }
+  if (fieldsConfig.fields.length > 0) {
+    // 有字段配置时，直接以配置为准展示所有字段
+    fieldsConfig.fields.forEach((field) => {
+      fieldsToDisplay.push({
+        ...field,
+        currentValue:
+          (profile?.profileFields?.[field.fieldName] as string) ??
+          (profile as any)?.[field.fieldName] ??
+          field.currentValue ??
+          "",
       });
-    } else {
-      // 如果没有字段配置，根据profileFields字段动态生成
-      Object.entries(profile.profileFields).forEach(([key, value]) => {
-        fieldsToDisplay.push({
-          fieldName: key,
-          fieldLabel: key.charAt(0).toUpperCase() + key.slice(1), // 首字母大写作为标签
-          fieldType: "text",
-          isRequired: false,
-          placeholder: `请输入${key}`,
-          options: null,
-          helpText: "",
-          currentValue: value as string,
-        });
+    });
+  } else if (profile?.profileFields && Object.keys(profile.profileFields).length > 0) {
+    // 没有字段配置时，根据 profileFields 动态生成
+    Object.entries(profile.profileFields).forEach(([key, value]) => {
+      fieldsToDisplay.push({
+        id: key,
+        fieldName: key,
+        fieldLabel: key.charAt(0).toUpperCase() + key.slice(1),
+        fieldType: "text",
+        isRequired: false,
+        placeholder: `请输入${key}`,
+        options: undefined,
+        helpText: "",
+        currentValue: value as string,
       });
-    }
+    });
   }
 
-  // 按fieldLabel排序
-  const sortedFields = [...fieldsToDisplay].sort((a, b) => {
-    return a.fieldLabel.localeCompare(b.fieldLabel, "zh-CN");
-  });
-
-  if (sortedFields.length === 0) {
+  if (fieldsToDisplay.length === 0) {
     return (
       <div className="text-center py-8 text-gray-500">
         <p>暂无可编辑的档案字段</p>
+        <p className="text-sm mt-1">请联系管理员配置档案字段</p>
       </div>
     );
   }
@@ -507,7 +509,7 @@ function ProfileFieldsForm() {
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {sortedFields.map((field) => (
+        {fieldsToDisplay.map((field) => (
           <DynamicFormField
             key={field.fieldName}
             field={field}

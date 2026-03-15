@@ -15,7 +15,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { useForm } from "react-hook-form";
+import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { useQueryClient } from "@tanstack/react-query";
@@ -31,8 +31,10 @@ import type {
 } from "@/lib/api";
 import { recruitmentApi } from "@/lib/api";
 import { toast } from "sonner";
+import { Plus, Trash2 } from "lucide-react";
 
-// Zod schema for form validation - same as creation but maybe we add id or other edit specific validations if needed
+// Zod schema for form validation
+// customQuestions.id 是可选的，后端有时候不返回 id 字段
 const updateBatchSchema = z.object({
   title: z.string().min(1, "标题是必填项"),
   clubId: z.string().min(1, "社团ID是必填项"),
@@ -44,15 +46,17 @@ const updateBatchSchema = z.object({
   customQuestions: z
     .array(
       z.object({
-        id: z.string(),
-        question: z.string(),
-        type: z.string(),
+        id: z.string().optional(),
+        question: z.string().min(1, "问题内容不能为空"),
+        type: z.enum(["text", "textarea", "select", "radio", "checkbox"]),
         required: z.boolean(),
         options: z.array(z.string()).optional(),
       }),
     )
     .optional(),
 });
+
+type FormData = z.infer<typeof updateBatchSchema>;
 
 export default function EditRecruitmentPage() {
   const router = useRouter();
@@ -71,12 +75,13 @@ export default function EditRecruitmentPage() {
   const {
     register,
     handleSubmit,
+    control,
     formState: { errors },
     watch,
     setValue,
     getValues,
     reset,
-  } = useForm<CreateRecruitmentBatchRequest>({
+  } = useForm<FormData>({
     resolver: zodResolver(updateBatchSchema),
     defaultValues: {
       title: "",
@@ -84,18 +89,36 @@ export default function EditRecruitmentPage() {
       description: "",
       startTime: "",
       endTime: "",
-      maxApplicants: 0,
+      maxApplicants: 1,
       requiredFields: [],
       customQuestions: [],
     },
   });
 
-  // Pre-fill form when recruitment data is loaded
+  // 自定义问题的 fieldArray
+  const { fields: questionFields, append: appendQuestion, remove: removeQuestion } = useFieldArray({
+    control,
+    name: "customQuestions",
+  });
+
+  // 第一步：recruitment 数据到达时立即填充所有字段（含 clubId）
+  // reset 时不触发校验（keepErrors:false），避免 clubId 空字符串瞬间报错
   React.useEffect(() => {
-    if (recruitment) {
-      reset({
+    if (!recruitment) return;
+    const clubId = recruitment.clubId || (recruitment as any).club?.id || "";
+    const customQuestions = (recruitment.customQuestions || []).map((q: any) => ({
+      id: q.id || undefined,
+      question: q.question || "",
+      type: (["text", "textarea", "select", "radio", "checkbox"].includes(q.type)
+        ? q.type
+        : "text") as "text" | "textarea" | "select" | "radio" | "checkbox",
+      required: typeof q.required === "boolean" ? q.required : false,
+      options: q.options || [],
+    }));
+    reset(
+      {
         title: recruitment.title || "",
-        clubId: recruitment.clubId || "",
+        clubId,
         description: recruitment.description || "",
         startTime: recruitment.startTime
           ? new Date(recruitment.startTime).toISOString().slice(0, 16)
@@ -103,14 +126,28 @@ export default function EditRecruitmentPage() {
         endTime: recruitment.endTime
           ? new Date(recruitment.endTime).toISOString().slice(0, 16)
           : "",
-        maxApplicants: recruitment.maxApplicants || 0,
+        maxApplicants: recruitment.maxApplicants || 1,
         requiredFields: recruitment.requiredFields || [],
-        customQuestions: recruitment.customQuestions || [],
-      });
-    }
+        customQuestions,
+      },
+      { keepErrors: false }  // 重置时清除所有错误，避免空 clubId 触发报错
+    );
   }, [recruitment, reset]);
 
+  // 第二步：clubs 列表就绪后，重新 setValue 让 Radix Select 识别已选中的 option
+  // Radix Select 需要 options 挂载后才能匹配 value，所以延一帧再设一次
+  React.useEffect(() => {
+    if (!recruitment || isClubsLoading || clubs.length === 0) return;
+    const clubId = recruitment.clubId || (recruitment as any).club?.id || "";
+    if (!clubId) return;
+    const timer = setTimeout(() => {
+      setValue("clubId", clubId, { shouldValidate: false });
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [recruitment, clubs, isClubsLoading, setValue]);
+
   const watchedRequiredFields = watch("requiredFields") || [];
+  const watchedClubId = watch("clubId");
 
   const handleFieldCheckboxChange = (fieldName: string, checked: boolean) => {
     const currentFields = getValues("requiredFields") || [];
@@ -124,39 +161,48 @@ export default function EditRecruitmentPage() {
     setValue("requiredFields", updatedFields);
   };
 
+  // 添加新问题
+  const handleAddQuestion = () => {
+    appendQuestion({
+      question: "",
+      type: "text",
+      required: false,
+      options: [],
+    });
+  };
+
   // 实现实际的更新批次的 API 调用
-  const onSubmit = async (data: CreateRecruitmentBatchRequest) => {
-    console.log("Form submission data for update:", data);
+  const onSubmit = async (data: FormData) => {
     const processedData: CreateRecruitmentBatchRequest = {
       ...data,
       requiredFields: data.requiredFields || [],
-      customQuestions: [], // Placeholder - will be implemented in future iterations
+      customQuestions: (data.customQuestions || []).map((q) => ({
+        id: q.id || "",
+        question: q.question,
+        type: q.type,
+        required: q.required,
+        options: q.options || [],
+      })),
     };
-    console.log("Processed data for API update:", processedData);
 
     try {
-      // 调用实际的 API 更新招新批次
-      const response = await recruitmentApi.updateRecruitmentBatch(
-        id,
-        processedData,
-      );
-
-      if (response && response.success) {
-        toast.success("招新批次更新成功！");
-        // 刷新相关的查询缓存，确保详情页显示最新的数据
-        queryClient.invalidateQueries({ queryKey: ["recruitment", id] });
-        queryClient.invalidateQueries({ queryKey: ["recruitments"] });
-        router.push(`/admin/recruitment/${id}`); // Redirect back to the detail page
-      } else if (response) {
-        throw new Error(response.message || "更新失败");
-      } else {
-        throw new Error("服务器响应异常");
-      }
-    } catch (error) {
-      console.error("更新招新批次失败:", error);
-      const errorMessage = error instanceof Error ? error.message : "未知错误";
-      toast.error(`更新招新批次失败: ${errorMessage}`);
+      await recruitmentApi.updateRecruitmentBatch(id, processedData);
+      toast.success("招新批次更新成功！");
+      queryClient.invalidateQueries({ queryKey: ["recruitment", id] });
+      queryClient.invalidateQueries({ queryKey: ["recruitments"] });
+      router.push(`/admin/recruitment/${id}`);
+    } catch (error: any) {
+      const errorMessage = error?.message || "未知错误";
+      toast.error("更新失败", { description: errorMessage });
     }
+  };
+
+  // 验证失败时给用户提示
+  const onInvalid = (errors: any) => {
+    const firstError = Object.entries(errors)[0];
+    const fieldName = firstError?.[0];
+    const message = (firstError?.[1] as any)?.message || "格式不正确";
+    toast.error("表单验证失败", { description: `字段「${fieldName}」: ${message}` });
   };
 
   if (isLoading) {
@@ -205,7 +251,7 @@ export default function EditRecruitmentPage() {
           <CardTitle>基本信息</CardTitle>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+          <form onSubmit={handleSubmit(onSubmit, onInvalid)} className="space-y-4">
             <div>
               <Label htmlFor="title">批次标题</Label>
               <Input id="title" {...register("title")} />
@@ -222,8 +268,8 @@ export default function EditRecruitmentPage() {
                 <p>加载社团列表中...</p>
               ) : (
                 <Select
-                  value={getValues("clubId")}
-                  onValueChange={(value) => setValue("clubId", value)}
+                  value={watchedClubId || ""}
+                  onValueChange={(value) => setValue("clubId", value, { shouldValidate: true })}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="请选择社团" />
@@ -342,11 +388,114 @@ export default function EditRecruitmentPage() {
               )}
             </div>
 
+            {/* 自定义问题模块 */}
             <div>
-              <Label>自定义问题</Label>
-              <p className="text-gray-500 text-sm mt-1">
-                （此部分将在后续迭代中完善动态问题添加功能）
-              </p>
+              <div className="flex items-center justify-between mb-2">
+                <Label>自定义问题</Label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleAddQuestion}
+                  className="flex items-center gap-1"
+                >
+                  <Plus className="h-4 w-4" />
+                  添加问题
+                </Button>
+              </div>
+
+              {questionFields.length === 0 ? (
+                <div className="border rounded-md p-4 bg-gray-50 text-center text-gray-500 text-sm">
+                  暂无自定义问题，点击右上角"添加问题"按钮添加
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {questionFields.map((field, index) => (
+                    <div
+                      key={field.id}
+                      className="border rounded-md p-4 bg-gray-50 space-y-3"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium text-gray-700">
+                          问题 {index + 1}
+                        </span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => removeQuestion(index)}
+                          className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+
+                      <div>
+                        <Label htmlFor={`q-content-${index}`} className="text-sm">
+                          问题内容
+                        </Label>
+                        <Input
+                          id={`q-content-${index}`}
+                          {...register(`customQuestions.${index}.question`)}
+                          placeholder="请输入问题内容..."
+                          className="mt-1"
+                        />
+                        {errors.customQuestions?.[index]?.question && (
+                          <p className="text-red-500 text-xs mt-1">
+                            {errors.customQuestions[index]?.question?.message}
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <Label htmlFor={`q-type-${index}`} className="text-sm">
+                            问题类型
+                          </Label>
+                          <Select
+                            value={watch(`customQuestions.${index}.type`) || "text"}
+                            onValueChange={(value) =>
+                              setValue(
+                                `customQuestions.${index}.type`,
+                                value as "text" | "textarea" | "select" | "radio" | "checkbox",
+                              )
+                            }
+                          >
+                            <SelectTrigger className="mt-1">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="text">单行文本</SelectItem>
+                              <SelectItem value="textarea">多行文本</SelectItem>
+                              <SelectItem value="select">下拉选择</SelectItem>
+                              <SelectItem value="radio">单选</SelectItem>
+                              <SelectItem value="checkbox">多选</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        <div className="flex items-end pb-1">
+                          <div className="flex items-center gap-2">
+                            <Checkbox
+                              id={`q-required-${index}`}
+                              checked={watch(`customQuestions.${index}.required`) || false}
+                              onCheckedChange={(checked: boolean) =>
+                                setValue(`customQuestions.${index}.required`, checked)
+                              }
+                            />
+                            <Label
+                              htmlFor={`q-required-${index}`}
+                              className="text-sm cursor-pointer"
+                            >
+                              必填
+                            </Label>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div className="flex justify-end space-x-2 pt-4">

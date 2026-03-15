@@ -4,8 +4,7 @@ import './globals.css'
 import { QueryProvider } from '@/lib/query-client'
 import { AuthGuard } from '@/components/auth/AuthGuard'
 import { ErrorProvider } from '@/components/providers/error-provider'
-import { Toaster } from '@/components/ui/toaster'
-import { Toaster as SonnerToaster } from 'sonner'
+import { Toaster } from 'sonner'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -27,9 +26,7 @@ export default function RootLayout({
             <AuthGuard>
               {children}
             </AuthGuard>
-            {/* 支持两种 toast 系统 */}
-            <Toaster />
-            <SonnerToaster position="top-right" />
+            <Toaster richColors position="top-right" />
           </ErrorProvider>
         </QueryProvider>
       </body>

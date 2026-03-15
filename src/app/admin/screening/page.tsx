@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   useApplications,
   useApplicationDetail,
@@ -98,6 +98,17 @@ export default function ResumeScreeningPage() {
   // 获取招新列表用于建立动态字段映射
   const { data: recruitmentsData } = useRecruitments();
 
+  // 数据加载完成后，自动默认选中第一个社团
+  useEffect(() => {
+    if (!recruitmentsData?.data?.length) return;
+    setFilters((prev) => {
+      if (prev.clubId) return prev; // 已经选了就不覆盖
+      const firstClubId = recruitmentsData.data[0].club?.id;
+      if (!firstClubId) return prev;
+      return { ...prev, clubId: firstClubId };
+    });
+  }, [recruitmentsData]);
+
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [selectedApplications, setSelectedApplications] = useState<string[]>(
     [],
@@ -147,60 +158,73 @@ export default function ResumeScreeningPage() {
 
   const applications = data?.applications || [];
 
-  // 根据社团获取字段配置
-  const getClubFields = (clubId: string) => {
-    if (!clubId) {
-      return [];
-    }
+  // fieldName → fieldLabel 映射表，来自系统注册字段配置
+  const fieldLabelMap = Object.fromEntries(
+    allRegistrationFields.map((f) => [f.fieldName, f.fieldLabel])
+  );
 
-    // 尝试从 allRegistrationFields 中获取字段配置
-    const fieldsFromConfig = allRegistrationFields.filter((field) => {
-      if (!field.isActive) return false;
-      // 通过招新活动关联到社团
-      return recruitmentsData?.data?.some((rec) => {
-        // 检查字段是否属于该招新活动，且该招新活动属于目标社团
-        return rec.id === field.recruitmentId && rec.club.id === clubId;
-      });
-    });
-
-    // 如果从配置中获取到了字段，直接返回
-    if (fieldsFromConfig.length > 0) {
-      return fieldsFromConfig;
-    }
-
-    // 如果从配置中没有获取到字段，尝试从申请数据中动态提取字段
-    // 这里我们定义一些通用字段，这些字段在大多数申请中都会出现
-    const commonFields = [
-      { id: "grade", fieldName: "grade", fieldLabel: "年级" },
-      { id: "major", fieldName: "major", fieldLabel: "专业" },
-      { id: "phone", fieldName: "phone", fieldLabel: "电话" },
-      { id: "experience", fieldName: "experience", fieldLabel: "相关经验" },
-    ];
-
-    return commonFields;
+  // 兜底的中文标签（覆盖后端可能没有配置到系统字段表的常见字段）
+  const FALLBACK_LABELS: Record<string, string> = {
+    name: "姓名",
+    studentId: "学号",
+    phone: "电话",
+    email: "邮箱",
+    college: "学院",
+    major: "专业",
+    grade: "年级",
+    experience: "相关经验",
+    motivation: "申请动机",
   };
 
-  // 当前社团的字段配置
-  const clubFields = getClubFields(filters.clubId);
+  const getFieldLabel = (fieldName: string) =>
+    fieldLabelMap[fieldName] || FALLBACK_LABELS[fieldName] || fieldName;
 
-  // 从申请数据中提取字段值
-  const getFieldValue = (application: any, fieldName: string) => {
-    // 首先检查 applicant 对象
-    if (application.applicant && application.applicant[fieldName]) {
-      return application.applicant[fieldName];
+  // 根据当前筛选条件，从招新批次的 requiredFields 中推导出需要展示哪些列
+  // 优先级：指定了 recruitmentId → 该批次的 requiredFields
+  //         只选了 clubId   → 该社团所有批次 requiredFields 的并集（去重）
+  //         都没选          → 空（需要先选社团）
+  const dynamicColumns: { fieldName: string; fieldLabel: string }[] = (() => {
+    const allRecruitments = recruitmentsData?.data ?? [];
+
+    let requiredFieldNames: string[] = [];
+
+    if (filters.recruitmentId) {
+      // 指定了批次：直接取该批次的 requiredFields
+      const rec = allRecruitments.find((r) => r.id === filters.recruitmentId);
+      requiredFieldNames = rec?.requiredFields ?? [];
+    } else if (filters.clubId) {
+      // 只选了社团：取该社团所有批次 requiredFields 的并集
+      const clubRecruitments = allRecruitments.filter(
+        (r) => r.club.id === filters.clubId
+      );
+      const seen = new Set<string>();
+      clubRecruitments.forEach((r) => {
+        (r.requiredFields ?? []).forEach((fn) => seen.add(fn));
+      });
+      requiredFieldNames = Array.from(seen);
     }
 
-    // 然后检查 education 对象
-    if (application.education && application.education[fieldName]) {
-      return application.education[fieldName];
-    }
+    // 长文本字段（textarea 类型），内容过长不适合在表格列中展示，在详情弹窗里查看即可
+    const LONG_TEXT_FIELDS = new Set(["experience", "motivation", "resumeText", "selfIntro", "description"]);
 
-    // 检查其他可能的位置
-    if (application[fieldName]) {
-      return application[fieldName];
-    }
+    // 过滤掉 name（已在"申请人"列展示）和长文本字段，转成 { fieldName, fieldLabel }
+    return requiredFieldNames
+      .filter((fn) => fn !== "name" && !LONG_TEXT_FIELDS.has(fn))
+      .map((fn) => ({ fieldName: fn, fieldLabel: getFieldLabel(fn) }));
+  })();
 
-    return "-";
+  // 从申请记录中提取指定字段的值
+  // 优先级：formData（候选人提交的表单原始数据）> education > applicant > 顶层字段
+  const getFieldValue = (application: any, fieldName: string): string => {
+    const val =
+      application.formData?.[fieldName] ??
+      application.education?.[fieldName] ??
+      application.applicant?.[fieldName] ??
+      application[fieldName];
+    if (val === undefined || val === null || val === "") return "-";
+    // 长文本截断显示
+    const str = String(val);
+    return str.length > 30 ? str.slice(0, 30) + "…" : str;
   };
 
   // 过滤和排序逻辑
@@ -310,75 +334,63 @@ export default function ResumeScreeningPage() {
       ApplicationStatus,
       {
         label: string;
-        variant: "default" | "secondary" | "destructive" | "outline";
-        color: string;
+        className: string;
         icon: LucideIcon;
       }
     > = {
       submitted: {
         label: "待筛选",
-        variant: "secondary" as const,
-        color: "text-gray-600",
+        className: "bg-gray-100 text-gray-700 border border-gray-300",
         icon: Clock,
       },
       screening: {
         label: "筛选中",
-        variant: "default" as const,
-        color: "text-blue-600",
+        className: "bg-blue-100 text-blue-700 border border-blue-300",
         icon: Star,
       },
       passed: {
         label: "通过筛选",
-        variant: "default" as const,
-        color: "text-green-600",
+        className: "bg-green-100 text-green-700 border border-green-300",
         icon: CheckCircle,
       },
       rejected: {
         label: "已拒绝",
-        variant: "destructive" as const,
-        color: "text-red-600",
+        className: "bg-red-100 text-red-700 border border-red-300",
         icon: XCircle,
       },
       interview_scheduled: {
         label: "已安排面试",
-        variant: "default" as const,
-        color: "text-purple-600",
+        className: "bg-purple-100 text-purple-700 border border-purple-300",
         icon: Clock,
       },
       interview_completed: {
         label: "面试完成",
-        variant: "secondary" as const,
-        color: "text-yellow-600",
+        className: "bg-amber-100 text-amber-700 border border-amber-300",
         icon: CheckCircle,
       },
       offer_sent: {
         label: "已发offer",
-        variant: "default" as const,
-        color: "text-indigo-600",
+        className: "bg-indigo-100 text-indigo-700 border border-indigo-300",
         icon: CheckCircle,
       },
       accepted: {
         label: "已接受",
-        variant: "default" as const,
-        color: "text-green-600",
+        className: "bg-emerald-100 text-emerald-700 border border-emerald-300",
         icon: CheckCircle,
       },
       declined: {
-        label: "已拒绝",
-        variant: "destructive" as const,
-        color: "text-red-600",
+        label: "已婉拒",
+        className: "bg-rose-100 text-rose-700 border border-rose-300",
         icon: XCircle,
       },
       archived: {
         label: "已归档",
-        variant: "secondary" as const,
-        color: "text-gray-500",
+        className: "bg-slate-100 text-slate-600 border border-slate-300",
         icon: XCircle,
       },
       draft: {
         label: "草稿",
-        variant: "secondary" as const,
-        color: "text-gray-500",
+        className: "bg-slate-100 text-slate-600 border border-slate-300",
         icon: Clock,
       },
     };
@@ -460,10 +472,14 @@ export default function ResumeScreeningPage() {
                     <SelectValue placeholder="选择社团" />
                   </SelectTrigger>
                   <SelectContent>
-                    {/* 动态生成社团选项，移除全部社团选项 */}
-                    {recruitmentsData?.data?.map((rec: any) => (
-                      <SelectItem key={rec.club.id} value={rec.club.id}>
-                        {rec.club.name}
+                    {/* 动态生成社团选项，按 club.id 去重后渲染 */}
+                    {Array.from(
+                      new Map(
+                        (recruitmentsData?.data ?? []).map((rec: any) => [rec.club.id, rec.club])
+                      ).values()
+                    ).map((club: any) => (
+                      <SelectItem key={club.id} value={club.id}>
+                        {club.name}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -710,13 +726,13 @@ export default function ResumeScreeningPage() {
                         />
                       </TableHead>
                       <TableHead className="w-[200px]">申请人</TableHead>
-                      {/* 动态生成的字段列 */}
-                      {clubFields.map((field) => (
+                      {/* 根据招新批次 requiredFields 动态生成列 */}
+                      {dynamicColumns.map((col) => (
                         <TableHead
-                          key={field.id}
+                          key={col.fieldName}
                           className="hidden md:table-cell"
                         >
-                          {field.fieldLabel}
+                          {col.fieldLabel}
                         </TableHead>
                       ))}
                       <TableHead className="text-center">AI评分</TableHead>
@@ -764,22 +780,22 @@ export default function ResumeScreeningPage() {
                                 </div>
                               </div>
                             </TableCell>
-                            {/* 动态生成的字段值 */}
-                            {clubFields.map((field) => (
+                            {/* 根据 dynamicColumns 动态生成字段值 */}
+                            {dynamicColumns.map((col) => (
                               <TableCell
-                                key={field.id}
-                                className="hidden md:table-cell text-sm"
+                                key={col.fieldName}
+                                className="hidden md:table-cell text-sm text-gray-700 max-w-[160px]"
                               >
-                                {getFieldValue(application, field.fieldName)}
+                                {getFieldValue(application, col.fieldName)}
                               </TableCell>
                             ))}
                             <TableCell className="text-center">
-                              {application.aiScore ? (
+                              {application.aiScore != null ? (
                                 <Badge
                                   variant="default"
-                                  className={`${application.aiScore >= 80 ? "bg-green-100 text-green-800" : application.aiScore >= 60 ? "bg-yellow-100 text-yellow-800" : "bg-red-100 text-red-800"}`}
+                                  className={`${Number(application.aiScore) >= 80 ? "bg-green-100 text-green-800" : Number(application.aiScore) >= 60 ? "bg-yellow-100 text-yellow-800" : "bg-red-100 text-red-800"}`}
                                 >
-                                  {application.aiScore.toFixed(1)}
+                                  {Number(application.aiScore).toFixed(1)}
                                 </Badge>
                               ) : (
                                 <span className="text-gray-400 text-sm">
@@ -788,10 +804,10 @@ export default function ResumeScreeningPage() {
                               )}
                             </TableCell>
                             <TableCell>
-                              <Badge
-                                variant={statusInfo.variant}
-                                className={`flex items-center gap-1 ${statusInfo.color} w-fit`}
-                              >
+                          <Badge
+                            variant="outline"
+                            className={`flex items-center gap-1 w-fit ${statusInfo.className}`}
+                          >
                                 <StatusIcon className="h-3 w-3" />
                                 <span className="hidden lg:inline">
                                   {statusInfo.label}
@@ -948,247 +964,216 @@ export default function ResumeScreeningPage() {
                 </Button>
               </div>
             </div>
-          ) : (
-            <div className="space-y-6">
-              {/* 基本信息 */}
-              <Card>
-                <CardHeader>
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <CardTitle className="text-xl">
-                        {selectedApplication.recruitment?.title || "未知招新"}
-                      </CardTitle>
-                      <CardDescription className="mt-2">
-                        {selectedApplication.recruitment?.club?.name ||
-                          "未知社团"}
-                      </CardDescription>
-                    </div>
-                    <Badge
-                      variant={
-                        selectedApplication.status === "passed"
-                          ? "default"
-                          : selectedApplication.status === "rejected"
-                            ? "destructive"
-                            : "secondary"
-                      }
-                      className={`flex items-center gap-1 ${selectedApplication.status === "passed" ? "text-green-600" : selectedApplication.status === "rejected" ? "text-red-600" : "text-gray-600"} w-fit`}
-                    >
-                      {selectedApplication.status === "submitted"
-                        ? "待筛选"
-                        : selectedApplication.status === "screening"
-                          ? "筛选中"
-                          : selectedApplication.status === "passed"
-                            ? "通过"
-                            : selectedApplication.status === "rejected"
-                              ? "拒绝"
-                              : selectedApplication.status ===
-                                  "interview_scheduled"
-                                ? "已安排面试"
-                                : selectedApplication.status ===
-                                    "interview_completed"
-                                  ? "面试完成"
-                                  : selectedApplication.status === "offer_sent"
-                                    ? "已发Offer"
-                                    : selectedApplication.status === "accepted"
-                                      ? "已接受"
-                                      : selectedApplication.status ===
-                                          "declined"
-                                        ? "已拒绝"
-                                        : selectedApplication.status ===
-                                            "archived"
-                                          ? "已归档"
-                                          : selectedApplication.status ===
-                                              "draft"
-                                            ? "草稿"
-                                            : selectedApplication.status}
-                    </Badge>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div>
-                    <h3 className="font-semibold mb-4 text-gray-900">
-                      申请人信息
-                    </h3>
-                    <div className="grid md:grid-cols-2 gap-8">
-                      <div className="space-y-3 text-sm">
-                        {selectedApplication.applicant && (
-                          <div className="flex justify-between">
-                            <span className="text-gray-600">姓名:</span>
-                            <span>
-                              {selectedApplication.applicant.name || "-"}
-                            </span>
-                          </div>
-                        )}
-                        {(selectedApplication.education?.studentId ||
-                          selectedApplication.formData?.studentId) && (
-                          <div className="flex justify-between">
-                            <span className="text-gray-600">学号:</span>
-                            <span>
-                              {selectedApplication.education.studentId ||
-                                selectedApplication.formData?.studentId}
-                            </span>
-                          </div>
-                        )}
-                        {(selectedApplication.education?.phone ||
-                          selectedApplication.formData?.phone) && (
-                          <div className="flex justify-between">
-                            <span className="text-gray-600">电话:</span>
-                            <span>
-                              {selectedApplication.education.phone ||
-                                selectedApplication.formData?.phone}
-                            </span>
-                          </div>
-                        )}
-                      </div>
-                      <div className="space-y-3 text-sm">
-                        {(selectedApplication.education?.college ||
-                          selectedApplication.formData?.college) && (
-                          <div className="flex justify-between">
-                            <span className="text-gray-600">学院:</span>
-                            <span>
-                              {selectedApplication.education.college ||
-                                selectedApplication.formData?.college}
-                            </span>
-                          </div>
-                        )}
-                        {(selectedApplication.education?.major ||
-                          selectedApplication.formData?.major) && (
-                          <div className="flex justify-between">
-                            <span className="text-gray-600">专业:</span>
-                            <span>
-                              {selectedApplication.education.major ||
-                                selectedApplication.formData?.major}
-                            </span>
-                          </div>
-                        )}
-                        {(selectedApplication.education?.grade ||
-                          selectedApplication.formData?.grade) && (
-                          <div className="flex justify-between">
-                            <span className="text-gray-600">年级:</span>
-                            <span>
-                              {selectedApplication.education.grade ||
-                                selectedApplication.formData?.grade}
-                            </span>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
+          ) : (() => {
+            const app = selectedApplication as any;
+            const applicant = app.applicant || {};
+            const education = app.education || {};
+            const formData = app.formData || {};
+            const skills = app.skills || {};
+            const experiences: any[] = app.experiences || [];
+            const attachments: any[] = app.attachments || [];
 
-              {/* 申请内容 */}
-              {(selectedApplication.education ||
-                selectedApplication.formData) && (
+            // 统一取值：formData > education > applicant 顶层
+            const getVal = (key: string) =>
+              formData[key] ?? education[key] ?? applicant[key] ?? null;
+
+            // 获取该申请对应的招新批次 requiredFields
+            const appRecruitment = (recruitmentsData?.data ?? []).find(
+              (r) => r.id === app.recruitmentId
+            );
+            const requiredFields: string[] = appRecruitment?.requiredFields ?? [];
+            const customQuestions: any[] = appRecruitment?.customQuestions ?? [];
+
+            // 状态标签
+            const STATUS_LABELS: Record<string, string> = {
+              submitted: "待筛选", screening: "筛选中", passed: "通过",
+              rejected: "拒绝", interview_scheduled: "已安排面试",
+              interview_completed: "面试完成", offer_sent: "已发 Offer",
+              accepted: "已接受", declined: "已拒绝", archived: "已归档", draft: "草稿",
+            };
+            const STATUS_COLORS: Record<string, string> = {
+              passed: "bg-green-100 text-green-700 border-green-200",
+              offer_sent: "bg-blue-100 text-blue-700 border-blue-200",
+              accepted: "bg-emerald-100 text-emerald-700 border-emerald-200",
+              rejected: "bg-red-100 text-red-700 border-red-200",
+              declined: "bg-red-100 text-red-700 border-red-200",
+              interview_scheduled: "bg-violet-100 text-violet-700 border-violet-200",
+              interview_completed: "bg-indigo-100 text-indigo-700 border-indigo-200",
+              screening: "bg-yellow-100 text-yellow-700 border-yellow-200",
+              submitted: "bg-gray-100 text-gray-700 border-gray-200",
+              draft: "bg-gray-100 text-gray-500 border-gray-200",
+              archived: "bg-slate-100 text-slate-500 border-slate-200",
+            };
+
+            // 基础固定字段（姓名、邮箱 始终展示）
+            const BASIC_FIELDS = ["name", "email", "studentId", "phone"];
+            // 长文本字段单独成块展示
+            const LONG_TEXT_FIELDS = new Set(["experience", "motivation", "resumeText", "selfIntro"]);
+
+            // 从 requiredFields 中筛选出短字段（基础固定字段之外的、非长文本的）
+            const shortFields = requiredFields.filter(
+              (fn) => !BASIC_FIELDS.includes(fn) && !LONG_TEXT_FIELDS.has(fn)
+            );
+            // 长文本字段
+            const longFields = requiredFields.filter((fn) => LONG_TEXT_FIELDS.has(fn));
+
+            const aiScore = app.aiScore != null ? Number(app.aiScore) : null;
+            const analysis = app.aiAnalysis;
+
+            return (
+              <div className="space-y-5">
+                {/* ── 顶部信息条 ── */}
+                <div className="flex items-start justify-between gap-4 pb-2 border-b">
+                  <div>
+                    <p className="text-xs text-gray-400 mb-1">{app.recruitment?.club?.name || "未知社团"}</p>
+                    <h2 className="text-lg font-bold text-gray-900">{app.recruitment?.title || "未知招新"}</h2>
+                    <p className="text-sm text-gray-500 mt-0.5">
+                      申请时间：{app.createdAt ? new Date(app.createdAt).toLocaleDateString("zh-CN") : "-"}
+                    </p>
+                  </div>
+                  <span className={`text-xs font-medium px-2.5 py-1 rounded-full border flex-shrink-0 ${STATUS_COLORS[app.status] ?? "bg-gray-100 text-gray-600 border-gray-200"}`}>
+                    {STATUS_LABELS[app.status] ?? app.status}
+                  </span>
+                </div>
+
+                {/* ── 申请人基础信息 ── */}
                 <Card>
-                  <CardHeader>
-                    <CardTitle className="text-lg">申请内容</CardTitle>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base">申请人信息</CardTitle>
                   </CardHeader>
-                  <CardContent className="space-y-6">
-                    {(selectedApplication.education?.experience ||
-                      selectedApplication.formData?.experience) && (
-                      <div>
-                        <h4 className="font-semibold text-gray-900 mb-2">
-                          相关经验
-                        </h4>
-                        <p className="text-gray-700 whitespace-pre-wrap">
-                          {selectedApplication.education?.experience ||
-                            selectedApplication.formData?.experience}
-                        </p>
-                      </div>
-                    )}
-                    {(selectedApplication.education?.motivation ||
-                      selectedApplication.formData?.motivation) && (
-                      <div>
-                        <h4 className="font-semibold text-gray-900 mb-2">
-                          申请动机
-                        </h4>
-                        <p className="text-gray-700 whitespace-pre-wrap">
-                          {selectedApplication.education?.motivation ||
-                            selectedApplication.formData?.motivation}
-                        </p>
-                      </div>
-                    )}
+                  <CardContent>
+                    <div className="grid grid-cols-2 gap-x-8 gap-y-3 text-sm">
+                      {/* 固定基础字段 */}
+                      {[
+                        { key: "name", label: "姓名" },
+                        { key: "email", label: "邮箱" },
+                        { key: "studentId", label: "学号" },
+                        { key: "phone", label: "电话" },
+                      ].map(({ key, label }) => {
+                        const val = getVal(key);
+                        if (!val) return null;
+                        return (
+                          <div key={key} className="flex justify-between gap-2">
+                            <span className="text-gray-500 flex-shrink-0">{label}</span>
+                            <span className="text-gray-900 text-right">{val}</span>
+                          </div>
+                        );
+                      })}
+                      {/* 招新批次 requiredFields 中的短字段 */}
+                      {shortFields.map((fn) => {
+                        const val = getVal(fn);
+                        if (!val) return null;
+                        return (
+                          <div key={fn} className="flex justify-between gap-2">
+                            <span className="text-gray-500 flex-shrink-0">{getFieldLabel(fn)}</span>
+                            <span className="text-gray-900 text-right">{val}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </CardContent>
                 </Card>
-              )}
 
-              {/* 经历和项目经验 */}
-              {selectedApplication.experiences &&
-                selectedApplication.experiences.length > 0 && (
+                {/* ── 长文本申请内容（相关经验、申请动机等）── */}
+                {longFields.length > 0 && (
                   <Card>
-                    <CardHeader>
-                      <CardTitle className="text-lg">项目经历</CardTitle>
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-base">申请内容</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      {longFields.map((fn) => {
+                        const val = getVal(fn);
+                        if (!val) return null;
+                        return (
+                          <div key={fn}>
+                            <h4 className="text-sm font-semibold text-gray-700 mb-1.5">{getFieldLabel(fn)}</h4>
+                            <p className="text-sm text-gray-600 whitespace-pre-wrap leading-relaxed bg-gray-50 rounded-lg p-3">{val}</p>
+                          </div>
+                        );
+                      })}
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* ── 自定义问题答案 ── */}
+                {customQuestions.length > 0 && (
+                  <Card>
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-base">问卷回答</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      {customQuestions.map((q: any, idx: number) => {
+                        const answer = formData[`custom_${idx}`] ?? formData[q.question] ?? null;
+                        return (
+                          <div key={idx}>
+                            <h4 className="text-sm font-semibold text-gray-700 mb-1.5">
+                              {q.question}
+                              {q.required && <span className="text-red-500 ml-1">*</span>}
+                            </h4>
+                            <p className="text-sm text-gray-600 whitespace-pre-wrap bg-gray-50 rounded-lg p-3">
+                              {answer ?? <span className="text-gray-400 italic">未作答</span>}
+                            </p>
+                          </div>
+                        );
+                      })}
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* ── 技能 ── */}
+                {(skills.languages?.length > 0 || skills.frameworks?.length > 0 || skills.tools?.length > 0) && (
+                  <Card>
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-base">技能</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      {[
+                        { label: "编程语言", items: skills.languages },
+                        { label: "框架 / 库", items: skills.frameworks },
+                        { label: "工具", items: skills.tools },
+                      ].map(({ label, items }) =>
+                        items?.length > 0 ? (
+                          <div key={label}>
+                            <p className="text-xs text-gray-400 mb-1.5">{label}</p>
+                            <div className="flex flex-wrap gap-1.5">
+                              {items.map((s: string, i: number) => (
+                                <Badge key={i} variant="secondary" className="text-xs">{s}</Badge>
+                              ))}
+                            </div>
+                          </div>
+                        ) : null
+                      )}
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* ── 经历 ── */}
+                {experiences.length > 0 && (
+                  <Card>
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-base">经历</CardTitle>
                     </CardHeader>
                     <CardContent>
-                      <div className="space-y-6">
-                        {selectedApplication.experiences.map((exp, index) => (
-                          <div
-                            key={index}
-                            className="border-l-4 border-blue-500 pl-4"
-                          >
-                            <div className="flex justify-between items-start mb-2">
-                              <h4 className="font-semibold text-gray-900">
-                                {exp.title}
-                              </h4>
-                              <span className="text-sm text-gray-500">
-                                {new Date(exp.startDate).toLocaleDateString(
-                                  "zh-CN",
-                                )}{" "}
-                                -{" "}
-                                {new Date(exp.endDate).toLocaleDateString(
-                                  "zh-CN",
-                                )}
+                      <div className="space-y-4">
+                        {experiences.map((exp: any, idx: number) => (
+                          <div key={idx} className="border-l-4 border-blue-400 pl-4 py-1">
+                            <div className="flex justify-between items-start">
+                              <span className="font-semibold text-sm text-gray-900">{exp.name || exp.title || "未命名"}</span>
+                              <span className="text-xs text-gray-400 flex-shrink-0 ml-2">
+                                {exp.year ?? (exp.startDate ? new Date(exp.startDate).getFullYear() : "")}
                               </span>
                             </div>
-
-                            <div className="text-sm text-gray-600 mb-2">
-                              <span className="font-medium">类型:</span>{" "}
-                              {exp.type === "project"
-                                ? "项目经历"
-                                : exp.type === "internship"
-                                  ? "实习经历"
-                                  : "其他"}
-                            </div>
-
-                            {exp.skills && exp.skills.length > 0 && (
-                              <div className="mb-3">
-                                <span className="text-sm font-medium text-gray-600">
-                                  技能标签:{" "}
-                                </span>
-                                <div className="flex flex-wrap gap-1 mt-1">
-                                  {exp.skills.map((skill, skillIndex) => (
-                                    <Badge
-                                      key={skillIndex}
-                                      variant="secondary"
-                                      className="text-xs"
-                                    >
-                                      {skill}
-                                    </Badge>
-                                  ))}
-                                </div>
-                              </div>
+                            {exp.type && (
+                              <p className="text-xs text-gray-500 mt-0.5">{exp.type}</p>
                             )}
-
                             {exp.description && (
-                              <div className="mb-2">
-                                <span className="text-sm font-medium text-gray-600">
-                                  描述:{" "}
-                                </span>
-                                <p className="text-sm text-gray-700 mt-1">
-                                  {exp.description}
-                                </p>
-                              </div>
+                              <p className="text-sm text-gray-600 mt-1">{exp.description}</p>
                             )}
-
-                            {exp.achievements && (
-                              <div>
-                                <span className="text-sm font-medium text-gray-600">
-                                  成果:{" "}
-                                </span>
-                                <p className="text-sm text-gray-700 mt-1">
-                                  {exp.achievements}
-                                </p>
+                            {exp.skills?.length > 0 && (
+                              <div className="flex flex-wrap gap-1 mt-2">
+                                {exp.skills.map((s: string, i: number) => (
+                                  <Badge key={i} variant="outline" className="text-xs">{s}</Badge>
+                                ))}
                               </div>
                             )}
                           </div>
@@ -1198,85 +1183,108 @@ export default function ResumeScreeningPage() {
                   </Card>
                 )}
 
-              {/* 附件 */}
-              {selectedApplication.attachments &&
-                selectedApplication.attachments.length > 0 && (
+                {/* ── 简历原文 ── */}
+                {app.resumeText && (
                   <Card>
-                    <CardHeader>
-                      <CardTitle className="text-lg">附件</CardTitle>
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-base">简历原文</CardTitle>
                     </CardHeader>
                     <CardContent>
-                      <div className="space-y-3">
-                        {selectedApplication.attachments.map(
-                          (attachment, index) => (
-                            <div
-                              key={index}
-                              className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
-                            >
-                              <div className="flex items-center gap-3">
-                                <div className="text-blue-600">📄</div>
-                                <div>
-                                  <div className="font-medium text-gray-900">
-                                    {attachment.originalName}
-                                  </div>
-                                  <div className="text-sm text-gray-500">
-                                    {attachment.description} •{" "}
-                                    {attachment.type === "resume"
-                                      ? "简历"
-                                      : "其他"}
-                                  </div>
-                                </div>
+                      <p className="text-sm text-gray-600 whitespace-pre-wrap leading-relaxed bg-gray-50 rounded-lg p-3">{app.resumeText}</p>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* ── 附件 ── */}
+                {attachments.length > 0 && (
+                  <Card>
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-base">附件</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-2">
+                        {attachments.map((att: any, idx: number) => (
+                          <div key={idx} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                            <div className="flex items-center gap-3">
+                              <span className="text-blue-500">📄</span>
+                              <div>
+                                <p className="text-sm font-medium text-gray-900">{att.originalName || att.filename}</p>
+                                {att.description && <p className="text-xs text-gray-400">{att.description}</p>}
                               </div>
-                              <Button variant="outline" size="sm">
-                                预览
-                              </Button>
                             </div>
-                          ),
-                        )}
+                            <Button variant="outline" size="sm">预览</Button>
+                          </div>
+                        ))}
                       </div>
                     </CardContent>
                   </Card>
                 )}
 
-              {/* AI分析结果 */}
-              {selectedApplication.aiScore !== null &&
-                selectedApplication.aiAnalysis && (
+                {/* ── AI 分析 ── */}
+                {aiScore !== null && (
                   <Card>
-                    <CardHeader>
-                      <CardTitle className="text-lg">AI分析结果</CardTitle>
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-base flex items-center gap-2">
+                        <Star className="h-4 w-4 text-yellow-500" />
+                        AI 评分
+                      </CardTitle>
                     </CardHeader>
-                    <CardContent>
-                      <div className="space-y-4">
-                        <div className="flex items-center gap-4">
-                          <span className="text-gray-600">综合评分:</span>
-                          <Badge
-                            variant={
-                              (selectedApplication.aiScore || 0) >= 80
-                                ? "default"
-                                : (selectedApplication.aiScore || 0) >= 60
-                                  ? "secondary"
-                                  : "destructive"
-                            }
-                          >
-                            {selectedApplication.aiScore || "暂无评分"}
-                          </Badge>
-                        </div>
-                        {selectedApplication.aiAnalysis && (
-                          <div>
-                            <h4 className="font-semibold text-gray-900 mb-2">
-                              分析详情
-                            </h4>
-                            <p className="text-gray-700 whitespace-pre-wrap">
-                              {selectedApplication.aiAnalysis}
-                            </p>
-                          </div>
-                        )}
+                    <CardContent className="space-y-4">
+                      {/* 评分圆形进度感 */}
+                      <div className="flex items-center gap-3">
+                        <span className={`text-2xl font-bold ${aiScore >= 80 ? "text-green-600" : aiScore >= 60 ? "text-orange-500" : "text-red-500"}`}>
+                          {aiScore.toFixed(1)}
+                        </span>
+                        <span className="text-gray-400 text-sm">/ 100</span>
+                        <Badge className={`ml-2 ${aiScore >= 80 ? "bg-green-100 text-green-700" : aiScore >= 60 ? "bg-orange-100 text-orange-700" : "bg-red-100 text-red-700"}`}>
+                          {aiScore >= 80 ? "优秀" : aiScore >= 60 ? "合格" : "待提升"}
+                        </Badge>
                       </div>
+                      {analysis && typeof analysis === "object" && (
+                        <div className="space-y-3">
+                          {analysis.summary && (
+                            <div>
+                              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">总结</p>
+                              <p className="text-sm text-gray-700">{analysis.summary}</p>
+                            </div>
+                          )}
+                          {Array.isArray(analysis.strengths) && analysis.strengths.length > 0 && (
+                            <div>
+                              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1.5">优势</p>
+                              <ul className="space-y-1">
+                                {analysis.strengths.map((s: string, i: number) => (
+                                  <li key={i} className="flex items-start gap-2 text-sm text-gray-700">
+                                    <CheckCircle className="h-3.5 w-3.5 text-green-500 flex-shrink-0 mt-0.5" />
+                                    {s}
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                          {Array.isArray(analysis.suggestions) && analysis.suggestions.length > 0 && (
+                            <div>
+                              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1.5">建议</p>
+                              <ul className="space-y-1">
+                                {analysis.suggestions.map((s: string, i: number) => (
+                                  <li key={i} className="flex items-start gap-2 text-sm text-gray-700">
+                                    <Star className="h-3.5 w-3.5 text-yellow-400 flex-shrink-0 mt-0.5" />
+                                    {s}
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                      {analysis && typeof analysis === "string" && (
+                        <p className="text-sm text-gray-700 whitespace-pre-wrap">{analysis}</p>
+                      )}
                     </CardContent>
                   </Card>
                 )}
-            </div>
-          )}
+              </div>
+            );
+          })()}
         </DialogContent>
       </Dialog>
     </div>

@@ -65,11 +65,7 @@ export function useUpdateProfileFields() {
       })
     },
     onError: (error: any) => {
-      toast({
-        title: '更新失败',
-        description: error.message || '更新档案字段时出现错误',
-        variant: 'destructive',
-      })
+      toast.error('更新失败', { description: error?.response?.data?.message || error.message || '更新档案字段时出现错误' })
     },
   })
 }
