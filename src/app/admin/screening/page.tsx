@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import {
   useApplications,
   useApplicationDetail,
+  useUpdateApplicationStatus,
 } from "@/hooks/use-applications";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useQueryClient } from "@tanstack/react-query";
@@ -12,7 +13,6 @@ import { useRecruitments } from "@/hooks/use-recruitment";
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
@@ -39,6 +39,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
@@ -46,9 +47,20 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
-  DialogClose,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { toast } from "sonner";
 import {
   Search,
   Filter,
@@ -63,25 +75,84 @@ import {
   MoreHorizontal,
   Download,
   Building2,
-  ArrowLeft,
+  FileText,
   type LucideIcon,
 } from "lucide-react";
-import Link from "next/link";
 import { ApplicationStatus } from "@/lib/api/applications/types";
+import { filesApi } from "@/lib/api/files";
+
+// ─── 状态流转规则 ───────────────────────────────────────────────
+// 根据当前状态，返回管理员可以流转到的目标状态列表
+const TRANSITIONS: Record<ApplicationStatus, ApplicationStatus[]> = {
+  draft: [],
+  submitted: ["screening", "rejected", "archived"],
+  screening: ["passed", "rejected", "archived"],
+  passed: ["interview_scheduled", "rejected", "archived"],
+  interview_scheduled: ["interview_completed", "rejected", "archived"],
+  interview_completed: ["offer_sent", "rejected", "archived"],
+  offer_sent: ["accepted", "declined", "archived"],
+  accepted: ["archived"],
+  declined: ["archived"],
+  rejected: ["archived"],
+  archived: [],
+};
+
+// 状态的中文标签
+const STATUS_LABELS: Record<ApplicationStatus, string> = {
+  draft: "草稿",
+  submitted: "待筛选",
+  screening: "筛选中",
+  passed: "通过筛选",
+  rejected: "已拒绝",
+  interview_scheduled: "已安排面试",
+  interview_completed: "面试完成",
+  offer_sent: "已发 Offer",
+  accepted: "已接受",
+  declined: "已婉拒",
+  archived: "已归档",
+};
+
+// 状态对应的 Badge 样式
+const STATUS_STYLES: Record<ApplicationStatus, { className: string; icon: LucideIcon }> = {
+  submitted:           { className: "bg-gray-100 text-gray-700 border-gray-300",       icon: Clock },
+  screening:           { className: "bg-blue-100 text-blue-700 border-blue-300",        icon: Star },
+  passed:              { className: "bg-green-100 text-green-700 border-green-300",     icon: CheckCircle },
+  rejected:            { className: "bg-red-100 text-red-700 border-red-300",           icon: XCircle },
+  interview_scheduled: { className: "bg-purple-100 text-purple-700 border-purple-300", icon: Clock },
+  interview_completed: { className: "bg-amber-100 text-amber-700 border-amber-300",    icon: CheckCircle },
+  offer_sent:          { className: "bg-indigo-100 text-indigo-700 border-indigo-300", icon: CheckCircle },
+  accepted:            { className: "bg-emerald-100 text-emerald-700 border-emerald-300", icon: CheckCircle },
+  declined:            { className: "bg-rose-100 text-rose-700 border-rose-300",       icon: XCircle },
+  archived:            { className: "bg-slate-100 text-slate-600 border-slate-300",    icon: XCircle },
+  draft:               { className: "bg-slate-100 text-slate-600 border-slate-300",    icon: Clock },
+};
+
+// 操作按钮文案
+const ACTION_LABELS: Partial<Record<ApplicationStatus, string>> = {
+  screening: "开始筛选",
+  passed: "通过筛选",
+  rejected: "拒绝",
+  interview_scheduled: "安排面试",
+  interview_completed: "完成面试",
+  offer_sent: "发送 Offer",
+  accepted: "标记接受",
+  declined: "标记婉拒",
+  archived: "归档",
+};
 
 /**
- * 简历筛选页面(表格版)
+ * 简历筛选页面（表格版）
  * 管理员可以高效地管理和评估大量申请者简历
  */
 export default function ResumeScreeningPage() {
-  const { hasPermission } = usePermissions();
+  usePermissions(); // 保留权限上下文
 
-  // 筛选状态
+  // ─── 筛选状态 ───────────────────────────────────────────────
   const [filters, setFilters] = useState({
     search: "",
     status: "all" as ApplicationStatus | "all",
     recruitmentId: "",
-    clubId: "", // 社团ID筛选，移除默认的"all"选项
+    clubId: "",
     minScore: "",
     maxScore: "",
     grade: "",
@@ -91,130 +162,89 @@ export default function ResumeScreeningPage() {
     sortOrder: "desc" as "asc" | "desc",
   });
 
-  // 获取注册字段配置
-  const { data: allRegistrationFields = [], isLoading: isFieldsLoading } =
-    useRegistrationFields();
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+  const [selectedApplications, setSelectedApplications] = useState<string[]>([]);
+  const [bulkActionStatus, setBulkActionStatus] = useState<ApplicationStatus | "">("");
 
-  // 获取招新列表用于建立动态字段映射
+  // ─── 详情弹窗 ───────────────────────────────────────────────
+  const [selectedApplicationId, setSelectedApplicationId] = useState<string | null>(null);
+  const [isDetailOpen, setIsDetailOpen] = useState(false);
+
+  // ─── 状态流转确认弹窗 ────────────────────────────────────────
+  const [confirmDialog, setConfirmDialog] = useState<{
+    open: boolean;
+    applicationId: string;
+    targetStatus: ApplicationStatus;
+    comment: string;
+  }>({ open: false, applicationId: "", targetStatus: "screening", comment: "" });
+
+  // ─── 批量操作确认弹窗 ────────────────────────────────────────
+  const [bulkConfirmOpen, setBulkConfirmOpen] = useState(false);
+
+  const queryClient = useQueryClient();
+
+  // ─── 数据获取 ────────────────────────────────────────────────
+  const { data: allRegistrationFields = [] } = useRegistrationFields();
   const { data: recruitmentsData } = useRecruitments();
 
-  // 数据加载完成后，自动默认选中第一个社团
+  // 自动默认选中第一个社团
   useEffect(() => {
     if (!recruitmentsData?.data?.length) return;
     setFilters((prev) => {
-      if (prev.clubId) return prev; // 已经选了就不覆盖
+      if (prev.clubId) return prev;
       const firstClubId = recruitmentsData.data[0].club?.id;
       if (!firstClubId) return prev;
       return { ...prev, clubId: firstClubId };
     });
   }, [recruitmentsData]);
 
-  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
-  const [selectedApplications, setSelectedApplications] = useState<string[]>(
-    [],
-  );
-  const [bulkActionStatus, setBulkActionStatus] = useState<
-    ApplicationStatus | ""
-  >("");
-  // 控制详情模态框的显示
-  const [selectedApplicationId, setSelectedApplicationId] = useState<
-    string | null
-  >(null);
-  const [isDetailOpen, setIsDetailOpen] = useState(false);
-
-  const queryClient = useQueryClient();
-
-  // 获取申请列表
   const { data, isLoading, error } = useApplications({
     status: filters.status !== "all" ? filters.status : undefined,
     recruitmentId: filters.recruitmentId || undefined,
-    clubId: filters.clubId || undefined, // 添加社团筛选
+    clubId: filters.clubId || undefined,
     page: 1,
-    limit: 100, // 增加每页显示数量以适配表格
+    limit: 100,
   });
 
-  // 获取选中申请的详情
-  const {
-    data: selectedApplication,
-    isLoading: isDetailLoading,
-    isError: isDetailError,
-    error: detailError,
-  } = useApplicationDetail(selectedApplicationId || "");
+  const { data: selectedApplication, isLoading: isDetailLoading, isError: isDetailError, error: detailError } =
+    useApplicationDetail(selectedApplicationId || "");
 
-  // 打开详情模态框
-  const openDetailModal = (applicationId: string) => {
-    setSelectedApplicationId(applicationId);
-    setIsDetailOpen(true);
-  };
+  // ─── Mutation ────────────────────────────────────────────────
+  const updateStatusMutation = useUpdateApplicationStatus();
 
-  // 关闭详情模态框
-  const closeDetailModal = () => {
-    setIsDetailOpen(false);
-    // 延迟清除选中的申请ID，以便模态框有足够的时间关闭
-    setTimeout(() => {
-      setSelectedApplicationId(null);
-    }, 300);
-  };
-
-  const applications = data?.applications || [];
-
-  // fieldName → fieldLabel 映射表，来自系统注册字段配置
+  // ─── 字段映射 ────────────────────────────────────────────────
   const fieldLabelMap = Object.fromEntries(
     allRegistrationFields.map((f) => [f.fieldName, f.fieldLabel])
   );
-
-  // 兜底的中文标签（覆盖后端可能没有配置到系统字段表的常见字段）
   const FALLBACK_LABELS: Record<string, string> = {
-    name: "姓名",
-    studentId: "学号",
-    phone: "电话",
-    email: "邮箱",
-    college: "学院",
-    major: "专业",
-    grade: "年级",
-    experience: "相关经验",
-    motivation: "申请动机",
+    name: "姓名", studentId: "学号", phone: "电话", email: "邮箱",
+    college: "学院", major: "专业", grade: "年级",
+    experience: "相关经验", motivation: "申请动机",
   };
-
   const getFieldLabel = (fieldName: string) =>
     fieldLabelMap[fieldName] || FALLBACK_LABELS[fieldName] || fieldName;
 
-  // 根据当前筛选条件，从招新批次的 requiredFields 中推导出需要展示哪些列
-  // 优先级：指定了 recruitmentId → 该批次的 requiredFields
-  //         只选了 clubId   → 该社团所有批次 requiredFields 的并集（去重）
-  //         都没选          → 空（需要先选社团）
+  // ─── 动态列 ──────────────────────────────────────────────────
+  const LONG_TEXT_FIELDS = new Set(["experience", "motivation", "resumeText", "selfIntro", "description"]);
+
   const dynamicColumns: { fieldName: string; fieldLabel: string }[] = (() => {
     const allRecruitments = recruitmentsData?.data ?? [];
-
     let requiredFieldNames: string[] = [];
-
     if (filters.recruitmentId) {
-      // 指定了批次：直接取该批次的 requiredFields
       const rec = allRecruitments.find((r) => r.id === filters.recruitmentId);
       requiredFieldNames = rec?.requiredFields ?? [];
     } else if (filters.clubId) {
-      // 只选了社团：取该社团所有批次 requiredFields 的并集
-      const clubRecruitments = allRecruitments.filter(
-        (r) => r.club.id === filters.clubId
-      );
       const seen = new Set<string>();
-      clubRecruitments.forEach((r) => {
-        (r.requiredFields ?? []).forEach((fn) => seen.add(fn));
-      });
+      allRecruitments
+        .filter((r) => r.club.id === filters.clubId)
+        .forEach((r) => (r.requiredFields ?? []).forEach((fn) => seen.add(fn)));
       requiredFieldNames = Array.from(seen);
     }
-
-    // 长文本字段（textarea 类型），内容过长不适合在表格列中展示，在详情弹窗里查看即可
-    const LONG_TEXT_FIELDS = new Set(["experience", "motivation", "resumeText", "selfIntro", "description"]);
-
-    // 过滤掉 name（已在"申请人"列展示）和长文本字段，转成 { fieldName, fieldLabel }
     return requiredFieldNames
       .filter((fn) => fn !== "name" && !LONG_TEXT_FIELDS.has(fn))
       .map((fn) => ({ fieldName: fn, fieldLabel: getFieldLabel(fn) }));
   })();
 
-  // 从申请记录中提取指定字段的值
-  // 优先级：formData（候选人提交的表单原始数据）> education > applicant > 顶层字段
   const getFieldValue = (application: any, fieldName: string): string => {
     const val =
       application.formData?.[fieldName] ??
@@ -222,287 +252,197 @@ export default function ResumeScreeningPage() {
       application.applicant?.[fieldName] ??
       application[fieldName];
     if (val === undefined || val === null || val === "") return "-";
-    // 长文本截断显示
     const str = String(val);
     return str.length > 30 ? str.slice(0, 30) + "…" : str;
   };
 
-  // 过滤和排序逻辑
+  // ─── 过滤排序 ────────────────────────────────────────────────
+  const applications = data?.applications || [];
   const filteredApplications = applications
     .filter((app) => {
       if (filters.search) {
-        const searchLower = filters.search.toLowerCase();
-        const nameMatch = app.applicant?.name
-          ?.toLowerCase()
-          .includes(searchLower);
-        const emailMatch = app.applicant?.email
-          ?.toLowerCase()
-          .includes(searchLower);
-        const studentIdMatch = app.applicant?.studentId
-          ?.toLowerCase()
-          .includes(searchLower);
-        if (!nameMatch && !emailMatch && !studentIdMatch) {
-          return false;
-        }
+        const s = filters.search.toLowerCase();
+        if (
+          !app.applicant?.name?.toLowerCase().includes(s) &&
+          !app.applicant?.email?.toLowerCase().includes(s) &&
+          !(app.applicant as any)?.studentId?.toLowerCase().includes(s)
+        ) return false;
       }
-      if (
-        filters.minScore &&
-        app.aiScore &&
-        app.aiScore < parseFloat(filters.minScore)
-      ) {
-        return false;
-      }
-      if (
-        filters.maxScore &&
-        app.aiScore &&
-        app.aiScore > parseFloat(filters.maxScore)
-      ) {
-        return false;
-      }
-      if (
-        filters.major &&
-        app.education?.major &&
-        !app.education.major.toLowerCase().includes(filters.major.toLowerCase())
-      ) {
-        return false;
-      }
-      if (
-        filters.grade &&
-        app.education?.grade &&
-        app.education.grade !== filters.grade
-      ) {
-        return false;
-      }
+      if (filters.minScore && app.aiScore != null && app.aiScore < parseFloat(filters.minScore)) return false;
+      if (filters.maxScore && app.aiScore != null && app.aiScore > parseFloat(filters.maxScore)) return false;
+      if (filters.major && (app as any).education?.major &&
+        !(app as any).education.major.toLowerCase().includes(filters.major.toLowerCase())) return false;
+      if (filters.grade && (app as any).education?.grade &&
+        (app as any).education.grade !== filters.grade) return false;
       return true;
     })
     .sort((a, b) => {
       const order = filters.sortOrder === "asc" ? 1 : -1;
-      switch (filters.sortBy) {
-        case "score":
-          return (
-            ((a.aiScore || 0) > (b.aiScore || 0) ? order : -order) ||
-            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-          );
-        case "name":
-          return (
-            (a.applicant?.name?.localeCompare(b.applicant?.name || "") || 0) *
-            order
-          );
-        default:
-          return (
-            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-          );
+      if (filters.sortBy === "score") {
+        return ((a.aiScore || 0) > (b.aiScore || 0) ? order : -order);
       }
+      if (filters.sortBy === "name") {
+        return (a.applicant?.name?.localeCompare(b.applicant?.name || "") || 0) * order;
+      }
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
     });
 
-  // 处理选中项变更
-  const handleSelectApplication = (applicationId: string) => {
+  // ─── 操作处理 ────────────────────────────────────────────────
+  const openStatusConfirm = (applicationId: string, targetStatus: ApplicationStatus) => {
+    setConfirmDialog({ open: true, applicationId, targetStatus, comment: "" });
+  };
+
+  const handleConfirmStatusChange = async () => {
+    const { applicationId, targetStatus, comment } = confirmDialog;
+    try {
+      await updateStatusMutation.mutateAsync({
+        id: applicationId,
+        data: { status: targetStatus, comment: comment || undefined },
+      });
+      toast.success(`状态已更新为「${STATUS_LABELS[targetStatus]}」`);
+      setConfirmDialog((prev) => ({ ...prev, open: false }));
+      // 如果详情弹窗也打开了，不关闭它，但数据会自动刷新
+    } catch (err: any) {
+      toast.error(err?.message || "状态更新失败，请稍后重试");
+    }
+  };
+
+  const handleBulkStatusUpdate = async () => {
+    if (!bulkActionStatus || selectedApplications.length === 0) return;
+    setBulkConfirmOpen(false);
+    let successCount = 0;
+    let failCount = 0;
+    for (const id of selectedApplications) {
+      try {
+        await updateStatusMutation.mutateAsync({
+          id,
+          data: { status: bulkActionStatus },
+        });
+        successCount++;
+      } catch {
+        failCount++;
+      }
+    }
+    if (successCount > 0) {
+      toast.success(`已成功更新 ${successCount} 条申请状态`);
+    }
+    if (failCount > 0) {
+      toast.error(`${failCount} 条申请更新失败`);
+    }
+    queryClient.invalidateQueries({ queryKey: ["applications"] });
+    setSelectedApplications([]);
+    setBulkActionStatus("");
+  };
+
+  const handleSelectApplication = (id: string) => {
     setSelectedApplications((prev) =>
-      prev.includes(applicationId)
-        ? prev.filter((id) => id !== applicationId)
-        : [...prev, applicationId],
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
     );
   };
 
-  // 处理全选
   const handleSelectAll = () => {
     setSelectedApplications(
       selectedApplications.length === filteredApplications.length
         ? []
-        : filteredApplications.map((app) => app.id),
+        : filteredApplications.map((app) => app.id)
     );
   };
 
-  // 批量状态更新(模拟)
-  const handleBulkStatusUpdate = async () => {
-    if (!bulkActionStatus || selectedApplications.length === 0) return;
-
-    console.log(
-      `批量更新 ${selectedApplications.length} 个申请状态为: ${bulkActionStatus}`,
-    );
-    // 模拟API调用
-    setTimeout(() => {
-      queryClient.invalidateQueries({ queryKey: ["applications"] });
-      setSelectedApplications([]);
-      setBulkActionStatus("");
-    }, 1000);
+  const openDetailModal = (id: string) => {
+    setSelectedApplicationId(id);
+    setIsDetailOpen(true);
   };
 
-  // 状态标签样式
-  const getStatusBadge = (status: ApplicationStatus) => {
-    const statusConfig: Record<
-      ApplicationStatus,
-      {
-        label: string;
-        className: string;
-        icon: LucideIcon;
-      }
-    > = {
-      submitted: {
-        label: "待筛选",
-        className: "bg-gray-100 text-gray-700 border border-gray-300",
-        icon: Clock,
-      },
-      screening: {
-        label: "筛选中",
-        className: "bg-blue-100 text-blue-700 border border-blue-300",
-        icon: Star,
-      },
-      passed: {
-        label: "通过筛选",
-        className: "bg-green-100 text-green-700 border border-green-300",
-        icon: CheckCircle,
-      },
-      rejected: {
-        label: "已拒绝",
-        className: "bg-red-100 text-red-700 border border-red-300",
-        icon: XCircle,
-      },
-      interview_scheduled: {
-        label: "已安排面试",
-        className: "bg-purple-100 text-purple-700 border border-purple-300",
-        icon: Clock,
-      },
-      interview_completed: {
-        label: "面试完成",
-        className: "bg-amber-100 text-amber-700 border border-amber-300",
-        icon: CheckCircle,
-      },
-      offer_sent: {
-        label: "已发offer",
-        className: "bg-indigo-100 text-indigo-700 border border-indigo-300",
-        icon: CheckCircle,
-      },
-      accepted: {
-        label: "已接受",
-        className: "bg-emerald-100 text-emerald-700 border border-emerald-300",
-        icon: CheckCircle,
-      },
-      declined: {
-        label: "已婉拒",
-        className: "bg-rose-100 text-rose-700 border border-rose-300",
-        icon: XCircle,
-      },
-      archived: {
-        label: "已归档",
-        className: "bg-slate-100 text-slate-600 border border-slate-300",
-        icon: XCircle,
-      },
-      draft: {
-        label: "草稿",
-        className: "bg-slate-100 text-slate-600 border border-slate-300",
-        icon: Clock,
-      },
-    };
-    return statusConfig[status];
+  const closeDetailModal = () => {
+    setIsDetailOpen(false);
+    setTimeout(() => setSelectedApplicationId(null), 300);
   };
 
+  // ─── 加载 / 错误状态 ──────────────────────────────────────────
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto" />
           <p className="mt-4 text-gray-600">加载中...</p>
         </div>
       </div>
     );
   }
-
   if (error) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-center">
-          <p className="text-red-600">
-            {error.message || "加载失败，请稍后重试"}
-          </p>
-        </div>
+        <p className="text-red-600">{error.message || "加载失败，请稍后重试"}</p>
       </div>
     );
   }
 
+  // ─── 渲染 ─────────────────────────────────────────────────────
   return (
     <div className="container mx-auto py-6 space-y-4">
       {/* 页面标题 */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
-            简历筛选
-          </h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">简历筛选</h1>
           <p className="mt-2 text-gray-600">
             管理和评估所有申请者简历 - 共 {filteredApplications.length} 个申请
           </p>
         </div>
-
-        {/* 导出按钮 */}
-        <div className="flex gap-2">
-          <Button variant="outline">
-            <Download className="h-4 w-4 mr-2" />
-            导出数据
-          </Button>
-        </div>
+        <Button variant="outline">
+          <Download className="h-4 w-4 mr-2" />
+          导出数据
+        </Button>
       </div>
 
       {/* 筛选工具栏 */}
       <Card>
         <CardHeader className="pb-3">
           <div className="flex flex-col gap-4">
-            {/* 基础搜索 */}
             <div className="flex flex-col md:flex-row gap-4">
+              {/* 搜索框 */}
               <div className="flex-1 relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                 <Input
                   placeholder="搜索申请人姓名、学号或邮箱..."
                   value={filters.search}
-                  onChange={(e) =>
-                    setFilters((prev) => ({ ...prev, search: e.target.value }))
-                  }
+                  onChange={(e) => setFilters((p) => ({ ...p, search: e.target.value }))}
                   className="pl-10"
                 />
               </div>
 
-              {/* 基础筛选 */}
               <div className="flex gap-2 flex-wrap">
+                {/* 社团筛选 */}
                 <Select
                   value={filters.clubId}
-                  onValueChange={(value) =>
-                    setFilters((prev) => ({ ...prev, clubId: value }))
-                  }
+                  onValueChange={(v) => setFilters((p) => ({ ...p, clubId: v, recruitmentId: "" }))}
                 >
                   <SelectTrigger className="w-[140px]">
                     <SelectValue placeholder="选择社团" />
                   </SelectTrigger>
                   <SelectContent>
-                    {/* 动态生成社团选项，按 club.id 去重后渲染 */}
                     {Array.from(
                       new Map(
-                        (recruitmentsData?.data ?? []).map((rec: any) => [rec.club.id, rec.club])
+                        (recruitmentsData?.data ?? []).map((r: any) => [r.club.id, r.club])
                       ).values()
                     ).map((club: any) => (
-                      <SelectItem key={club.id} value={club.id}>
-                        {club.name}
-                      </SelectItem>
+                      <SelectItem key={club.id} value={club.id}>{club.name}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
 
+                {/* 状态筛选 */}
                 <Select
                   value={filters.status}
-                  onValueChange={(value) =>
-                    setFilters((prev) => ({
-                      ...prev,
-                      status: value as ApplicationStatus | "all",
-                    }))
-                  }
+                  onValueChange={(v) => setFilters((p) => ({ ...p, status: v as ApplicationStatus | "all" }))}
                 >
-                  <SelectTrigger className="w-[120px]">
+                  <SelectTrigger className="w-[130px]">
                     <SelectValue placeholder="状态筛选" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">全部状态</SelectItem>
-                    <SelectItem value="submitted">待筛选</SelectItem>
-                    <SelectItem value="screening">筛选中</SelectItem>
-                    <SelectItem value="passed">通过</SelectItem>
-                    <SelectItem value="rejected">拒绝</SelectItem>
+                    {(Object.keys(STATUS_LABELS) as ApplicationStatus[]).map((s) => (
+                      <SelectItem key={s} value={s}>{STATUS_LABELS[s]}</SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
 
@@ -513,114 +453,48 @@ export default function ResumeScreeningPage() {
                 >
                   <Filter className="h-4 w-4" />
                   高级筛选
-                  {showAdvancedFilters ? (
-                    <ChevronUp className="h-4 w-4" />
-                  ) : (
-                    <ChevronDown className="h-4 w-4" />
-                  )}
+                  {showAdvancedFilters ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                 </Button>
               </div>
             </div>
 
-            {/* 高级筛选面板 */}
+            {/* 高级筛选 */}
             {showAdvancedFilters && (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 p-4 bg-gray-50 rounded-lg">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    AI评分范围
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">AI评分范围</label>
                   <div className="flex gap-2">
-                    <Input
-                      type="number"
-                      placeholder="最低分"
-                      value={filters.minScore}
-                      onChange={(e) =>
-                        setFilters((prev) => ({
-                          ...prev,
-                          minScore: e.target.value,
-                        }))
-                      }
-                      className="w-full"
-                    />
-                    <Input
-                      type="number"
-                      placeholder="最高分"
-                      value={filters.maxScore}
-                      onChange={(e) =>
-                        setFilters((prev) => ({
-                          ...prev,
-                          maxScore: e.target.value,
-                        }))
-                      }
-                      className="w-full"
-                    />
+                    <Input type="number" placeholder="最低" value={filters.minScore}
+                      onChange={(e) => setFilters((p) => ({ ...p, minScore: e.target.value }))} />
+                    <Input type="number" placeholder="最高" value={filters.maxScore}
+                      onChange={(e) => setFilters((p) => ({ ...p, maxScore: e.target.value }))} />
                   </div>
                 </div>
-
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    年级
-                  </label>
-                  <Select
-                    value={filters.grade}
-                    onValueChange={(value) =>
-                      setFilters((prev) => ({ ...prev, grade: value }))
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="选择年级" />
-                    </SelectTrigger>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">年级</label>
+                  <Select value={filters.grade} onValueChange={(v) => setFilters((p) => ({ ...p, grade: v }))}>
+                    <SelectTrigger><SelectValue placeholder="选择年级" /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="大一">大一</SelectItem>
-                      <SelectItem value="大二">大二</SelectItem>
-                      <SelectItem value="大三">大三</SelectItem>
-                      <SelectItem value="大四">大四</SelectItem>
+                      {["大一","大二","大三","大四"].map((g) => (
+                        <SelectItem key={g} value={g}>{g}</SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
-
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    专业
-                  </label>
-                  <Input
-                    placeholder="输入专业名称"
-                    value={filters.major}
-                    onChange={(e) =>
-                      setFilters((prev) => ({ ...prev, major: e.target.value }))
-                    }
-                  />
+                  <label className="block text-sm font-medium text-gray-700 mb-2">专业</label>
+                  <Input placeholder="输入专业名称" value={filters.major}
+                    onChange={(e) => setFilters((p) => ({ ...p, major: e.target.value }))} />
                 </div>
-
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    技能标签
-                  </label>
-                  <Input
-                    placeholder="输入技能关键词"
-                    value={filters.skills}
-                    onChange={(e) =>
-                      setFilters((prev) => ({
-                        ...prev,
-                        skills: e.target.value,
-                      }))
-                    }
-                  />
+                  <label className="block text-sm font-medium text-gray-700 mb-2">技能标签</label>
+                  <Input placeholder="输入技能关键词" value={filters.skills}
+                    onChange={(e) => setFilters((p) => ({ ...p, skills: e.target.value }))} />
                 </div>
-
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    排序方式
-                  </label>
-                  <Select
-                    value={filters.sortBy}
-                    onValueChange={(value) =>
-                      setFilters((prev) => ({ ...prev, sortBy: value }))
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="排序方式" />
-                    </SelectTrigger>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">排序方式</label>
+                  <Select value={filters.sortBy} onValueChange={(v) => setFilters((p) => ({ ...p, sortBy: v }))}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="createdAt">最新创建</SelectItem>
                       <SelectItem value="score">AI评分</SelectItem>
@@ -637,51 +511,32 @@ export default function ResumeScreeningPage() {
         {selectedApplications.length > 0 && (
           <CardContent className="border-t pt-4">
             <div className="flex flex-col sm:flex-row items-center gap-4">
-              <div className="flex items-center gap-2">
-                <Checkbox
-                  checked={
-                    selectedApplications.length ===
-                      filteredApplications.length &&
-                    filteredApplications.length > 0
-                  }
-                  onCheckedChange={handleSelectAll}
-                />
-                <span className="text-sm font-medium">
-                  已选择 {selectedApplications.length} /{" "}
-                  {filteredApplications.length} 个申请
-                </span>
-              </div>
-
+              <span className="text-sm font-medium">
+                已选择 {selectedApplications.length} / {filteredApplications.length} 个申请
+              </span>
               <div className="flex flex-wrap gap-2 sm:ml-auto">
                 <Select
                   value={bulkActionStatus}
-                  onValueChange={(value) =>
-                    setBulkActionStatus(value as ApplicationStatus)
-                  }
+                  onValueChange={(v) => setBulkActionStatus(v as ApplicationStatus)}
                 >
-                  <SelectTrigger className="w-[140px]">
-                    <SelectValue placeholder="批量操作" />
+                  <SelectTrigger className="w-[150px]">
+                    <SelectValue placeholder="选择批量操作" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="passed">批量通过</SelectItem>
+                    <SelectItem value="screening">批量开始筛选</SelectItem>
+                    <SelectItem value="passed">批量通过筛选</SelectItem>
                     <SelectItem value="rejected">批量拒绝</SelectItem>
-                    <SelectItem value="screening">开始筛选</SelectItem>
+                    <SelectItem value="archived">批量归档</SelectItem>
                   </SelectContent>
                 </Select>
-
                 <Button
-                  onClick={handleBulkStatusUpdate}
-                  disabled={!bulkActionStatus}
+                  onClick={() => setBulkConfirmOpen(true)}
+                  disabled={!bulkActionStatus || updateStatusMutation.isPending}
                   size="sm"
                 >
                   应用操作
                 </Button>
-
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setSelectedApplications([])}
-                >
+                <Button variant="outline" size="sm" onClick={() => setSelectedApplications([])}>
                   清空选择
                 </Button>
               </div>
@@ -690,7 +545,7 @@ export default function ResumeScreeningPage() {
         )}
       </Card>
 
-      {/* 申请列表 - 表格形式 */}
+      {/* 申请列表 */}
       {!filters.clubId ? (
         <Card>
           <CardContent className="h-64 flex items-center justify-center">
@@ -698,12 +553,8 @@ export default function ResumeScreeningPage() {
               <div className="w-16 h-16 rounded-full bg-blue-100 flex items-center justify-center mx-auto mb-4">
                 <Building2 className="h-8 w-8 text-blue-600" />
               </div>
-              <h3 className="text-lg font-medium text-gray-900 mb-2">
-                请选择一个社团
-              </h3>
-              <p className="text-gray-600">
-                不同社团的候选人信息字段不一致，请选择一个具体的社团才能查看相关申请
-              </p>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">请选择一个社团</h3>
+              <p className="text-gray-600">不同社团的候选人信息字段不一致，请选择一个具体的社团才能查看相关申请</p>
             </div>
           </CardContent>
         </Card>
@@ -718,20 +569,15 @@ export default function ResumeScreeningPage() {
                       <TableHead className="w-12">
                         <Checkbox
                           checked={
-                            selectedApplications.length ===
-                              filteredApplications.length &&
+                            selectedApplications.length === filteredApplications.length &&
                             filteredApplications.length > 0
                           }
                           onCheckedChange={handleSelectAll}
                         />
                       </TableHead>
                       <TableHead className="w-[200px]">申请人</TableHead>
-                      {/* 根据招新批次 requiredFields 动态生成列 */}
                       {dynamicColumns.map((col) => (
-                        <TableHead
-                          key={col.fieldName}
-                          className="hidden md:table-cell"
-                        >
+                        <TableHead key={col.fieldName} className="hidden md:table-cell">
                           {col.fieldLabel}
                         </TableHead>
                       ))}
@@ -743,7 +589,7 @@ export default function ResumeScreeningPage() {
                   <TableBody>
                     {filteredApplications.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={9} className="h-32 text-center">
+                        <TableCell colSpan={6 + dynamicColumns.length} className="h-32 text-center">
                           <div className="text-gray-500">
                             <Users className="h-8 w-8 mx-auto mb-2 opacity-50" />
                             <p>暂无申请数据</p>
@@ -752,22 +598,16 @@ export default function ResumeScreeningPage() {
                       </TableRow>
                     ) : (
                       filteredApplications.map((application) => {
-                        const statusInfo = getStatusBadge(application.status);
-                        const StatusIcon = statusInfo.icon;
+                        const statusStyle = STATUS_STYLES[application.status];
+                        const StatusIcon = statusStyle.icon;
+                        const transitions = TRANSITIONS[application.status] ?? [];
 
                         return (
-                          <TableRow
-                            key={application.id}
-                            className="hover:bg-gray-50"
-                          >
+                          <TableRow key={application.id} className="hover:bg-gray-50">
                             <TableCell>
                               <Checkbox
-                                checked={selectedApplications.includes(
-                                  application.id,
-                                )}
-                                onCheckedChange={() =>
-                                  handleSelectApplication(application.id)
-                                }
+                                checked={selectedApplications.includes(application.id)}
+                                onCheckedChange={() => handleSelectApplication(application.id)}
                               />
                             </TableCell>
                             <TableCell className="font-medium">
@@ -780,12 +620,8 @@ export default function ResumeScreeningPage() {
                                 </div>
                               </div>
                             </TableCell>
-                            {/* 根据 dynamicColumns 动态生成字段值 */}
                             {dynamicColumns.map((col) => (
-                              <TableCell
-                                key={col.fieldName}
-                                className="hidden md:table-cell text-sm text-gray-700 max-w-[160px]"
-                              >
+                              <TableCell key={col.fieldName} className="hidden md:table-cell text-sm text-gray-700 max-w-[160px]">
                                 {getFieldValue(application, col.fieldName)}
                               </TableCell>
                             ))}
@@ -793,31 +629,27 @@ export default function ResumeScreeningPage() {
                               {application.aiScore != null ? (
                                 <Badge
                                   variant="default"
-                                  className={`${Number(application.aiScore) >= 80 ? "bg-green-100 text-green-800" : Number(application.aiScore) >= 60 ? "bg-yellow-100 text-yellow-800" : "bg-red-100 text-red-800"}`}
+                                  className={
+                                    Number(application.aiScore) >= 80
+                                      ? "bg-green-100 text-green-800"
+                                      : Number(application.aiScore) >= 60
+                                      ? "bg-yellow-100 text-yellow-800"
+                                      : "bg-red-100 text-red-800"
+                                  }
                                 >
                                   {Number(application.aiScore).toFixed(1)}
                                 </Badge>
                               ) : (
-                                <span className="text-gray-400 text-sm">
-                                  未评分
-                                </span>
+                                <span className="text-gray-400 text-sm">未评分</span>
                               )}
                             </TableCell>
                             <TableCell>
-                          <Badge
-                            variant="outline"
-                            className={`flex items-center gap-1 w-fit ${statusInfo.className}`}
-                          >
+                              <Badge
+                                variant="outline"
+                                className={`flex items-center gap-1 w-fit ${statusStyle.className}`}
+                              >
                                 <StatusIcon className="h-3 w-3" />
-                                <span className="hidden lg:inline">
-                                  {statusInfo.label}
-                                </span>
-                                <span className="lg:hidden">
-                                  {statusInfo.label
-                                    .replace("筛选", "")
-                                    .replace("已", "")
-                                    .replace("面试", "面")}
-                                </span>
+                                {STATUS_LABELS[application.status]}
                               </Badge>
                             </TableCell>
                             <TableCell className="text-right">
@@ -825,60 +657,44 @@ export default function ResumeScreeningPage() {
                                 <Button
                                   size="sm"
                                   variant="ghost"
-                                  onClick={() =>
-                                    openDetailModal(application.id)
-                                  }
+                                  onClick={() => openDetailModal(application.id)}
                                 >
                                   <Eye className="h-4 w-4" />
-                                  <span className="hidden sm:inline ml-1">
-                                    详情
-                                  </span>
+                                  <span className="hidden sm:inline ml-1">详情</span>
                                 </Button>
 
-                                <DropdownMenu>
-                                  <DropdownMenuTrigger asChild>
-                                    <Button size="sm" variant="ghost">
-                                      <MoreHorizontal className="h-4 w-4" />
-                                    </Button>
-                                  </DropdownMenuTrigger>
-                                  <DropdownMenuContent align="end">
-                                    <DropdownMenuItem
-                                      onClick={() =>
-                                        handleSelectApplication(application.id)
-                                      }
-                                    >
-                                      {selectedApplications.includes(
-                                        application.id,
-                                      )
-                                        ? "取消选择"
-                                        : "选择"}
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem>
-                                      <Star className="mr-2 h-4 w-4" />
-                                      开始筛选
-                                    </DropdownMenuItem>
-                                    {application.status === "submitted" && (
-                                      <>
-                                        <DropdownMenuItem
-                                          onClick={() => {
-                                            /* 通过逻辑 */
-                                          }}
-                                        >
-                                          <CheckCircle className="mr-2 h-4 w-4" />
-                                          快速通过
-                                        </DropdownMenuItem>
-                                        <DropdownMenuItem
-                                          onClick={() => {
-                                            /* 拒绝逻辑 */
-                                          }}
-                                        >
-                                          <XCircle className="mr-2 h-4 w-4" />
-                                          快速拒绝
-                                        </DropdownMenuItem>
-                                      </>
-                                    )}
-                                  </DropdownMenuContent>
-                                </DropdownMenu>
+                                {transitions.length > 0 && (
+                                  <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                      <Button size="sm" variant="ghost">
+                                        <MoreHorizontal className="h-4 w-4" />
+                                      </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end">
+                                      {transitions.map((target, idx) => {
+                                        const isDestructive = target === "rejected" || target === "archived";
+                                        const isDanger = target === "declined";
+                                        return (
+                                          <div key={target}>
+                                            {idx > 0 && isDestructive && transitions[idx - 1] !== "rejected" && transitions[idx - 1] !== "archived" && (
+                                              <DropdownMenuSeparator />
+                                            )}
+                                            <DropdownMenuItem
+                                              onClick={() => openStatusConfirm(application.id, target)}
+                                              className={
+                                                isDestructive || isDanger
+                                                  ? "text-red-600 focus:text-red-600"
+                                                  : ""
+                                              }
+                                            >
+                                              {ACTION_LABELS[target] || STATUS_LABELS[target]}
+                                            </DropdownMenuItem>
+                                          </div>
+                                        );
+                                      })}
+                                    </DropdownMenuContent>
+                                  </DropdownMenu>
+                                )}
                               </div>
                             </TableCell>
                           </TableRow>
@@ -891,78 +707,111 @@ export default function ResumeScreeningPage() {
             </CardContent>
           </Card>
 
-          {/* 表格底部统计信息 */}
+          {/* 底部统计 */}
           <div className="flex flex-col sm:flex-row justify-between items-center text-sm text-gray-600 gap-2">
             <div>
               显示 {filteredApplications.length} 条记录
               {filters.search && ` (从 ${applications.length} 条中筛选)`}
             </div>
             <div className="flex gap-4 text-xs">
-              <span>
-                待筛选:{" "}
-                <span className="font-semibold">
-                  {
-                    applications.filter((app) => app.status === "submitted")
-                      .length
-                  }
+              {(["submitted","screening","passed","rejected"] as ApplicationStatus[]).map((s) => (
+                <span key={s}>
+                  {STATUS_LABELS[s]}:{" "}
+                  <span className="font-semibold">
+                    {applications.filter((a) => a.status === s).length}
+                  </span>
                 </span>
-              </span>
-              <span>
-                筛选中:{" "}
-                <span className="font-semibold text-blue-600">
-                  {
-                    applications.filter((app) => app.status === "screening")
-                      .length
-                  }
-                </span>
-              </span>
-              <span>
-                已通过:{" "}
-                <span className="font-semibold text-green-600">
-                  {applications.filter((app) => app.status === "passed").length}
-                </span>
-              </span>
-              <span>
-                已拒绝:{" "}
-                <span className="font-semibold text-red-600">
-                  {
-                    applications.filter((app) => app.status === "rejected")
-                      .length
-                  }
-                </span>
-              </span>
+              ))}
             </div>
           </div>
         </>
       )}
 
-      {/* 简历详情模态框 */}
+      {/* ─── 状态流转确认弹窗 ─────────────────────────────────── */}
+      <AlertDialog
+        open={confirmDialog.open}
+        onOpenChange={(open) => setConfirmDialog((p) => ({ ...p, open }))}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              确认操作：{ACTION_LABELS[confirmDialog.targetStatus] || STATUS_LABELS[confirmDialog.targetStatus]}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              将把该申请状态更新为「{STATUS_LABELS[confirmDialog.targetStatus]}」，此操作不可撤销。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="px-1 py-2">
+            <Label className="text-sm font-medium">备注（可选）</Label>
+            <Textarea
+              className="mt-1.5"
+              placeholder="填写本次操作的原因或备注..."
+              value={confirmDialog.comment}
+              onChange={(e) =>
+                setConfirmDialog((p) => ({ ...p, comment: e.target.value }))
+              }
+              rows={3}
+            />
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmStatusChange}
+              disabled={updateStatusMutation.isPending}
+              className={
+                confirmDialog.targetStatus === "rejected" || confirmDialog.targetStatus === "archived"
+                  ? "bg-red-600 hover:bg-red-700"
+                  : ""
+              }
+            >
+              {updateStatusMutation.isPending ? "处理中..." : "确认"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* ─── 批量操作确认弹窗 ─────────────────────────────────── */}
+      <AlertDialog open={bulkConfirmOpen} onOpenChange={setBulkConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>确认批量操作</AlertDialogTitle>
+            <AlertDialogDescription>
+              将对 <strong>{selectedApplications.length}</strong> 条申请执行「
+              {bulkActionStatus ? STATUS_LABELS[bulkActionStatus] : ""}」操作，此操作不可撤销。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleBulkStatusUpdate}
+              disabled={updateStatusMutation.isPending}
+              className={
+                bulkActionStatus === "rejected" || bulkActionStatus === "archived"
+                  ? "bg-red-600 hover:bg-red-700"
+                  : ""
+              }
+            >
+              {updateStatusMutation.isPending ? "处理中..." : "确认执行"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* ─── 简历详情弹窗 ─────────────────────────────────────── */}
       <Dialog open={isDetailOpen} onOpenChange={setIsDetailOpen}>
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="flex items-center justify-between">
-              <span>简历详情</span>
-              <Button variant="ghost" size="sm" onClick={closeDetailModal}>
-                <XCircle className="h-4 w-4" />
-              </Button>
-            </DialogTitle>
+            <DialogTitle>简历详情</DialogTitle>
           </DialogHeader>
 
           {isDetailLoading ? (
             <div className="flex items-center justify-center py-12">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-              <p className="mt-4 text-gray-600">加载中...</p>
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto" />
             </div>
           ) : isDetailError || !selectedApplication ? (
-            <div className="flex items-center justify-center py-12">
-              <div className="text-center">
-                <p className="text-red-600">
-                  {detailError?.message || "加载失败，请稍后重试"}
-                </p>
-                <Button onClick={closeDetailModal} className="mt-4">
-                  关闭
-                </Button>
-              </div>
+            <div className="text-center py-12">
+              <p className="text-red-600">{detailError?.message || "加载失败，请稍后重试"}</p>
+              <Button onClick={closeDetailModal} className="mt-4">关闭</Button>
             </div>
           ) : (() => {
             const app = selectedApplication as any;
@@ -971,58 +820,31 @@ export default function ResumeScreeningPage() {
             const formData = app.formData || {};
             const skills = app.skills || {};
             const experiences: any[] = app.experiences || [];
-            const attachments: any[] = app.attachments || [];
+            // 后端返回字段为 files（含 viewUrl/downloadUrl），兼容旧字段 attachments
+            const attachments: any[] = app.files || app.attachments || [];
 
-            // 统一取值：formData > education > applicant 顶层
             const getVal = (key: string) =>
               formData[key] ?? education[key] ?? applicant[key] ?? null;
 
-            // 获取该申请对应的招新批次 requiredFields
             const appRecruitment = (recruitmentsData?.data ?? []).find(
               (r) => r.id === app.recruitmentId
             );
             const requiredFields: string[] = appRecruitment?.requiredFields ?? [];
             const customQuestions: any[] = appRecruitment?.customQuestions ?? [];
 
-            // 状态标签
-            const STATUS_LABELS: Record<string, string> = {
-              submitted: "待筛选", screening: "筛选中", passed: "通过",
-              rejected: "拒绝", interview_scheduled: "已安排面试",
-              interview_completed: "面试完成", offer_sent: "已发 Offer",
-              accepted: "已接受", declined: "已拒绝", archived: "已归档", draft: "草稿",
-            };
-            const STATUS_COLORS: Record<string, string> = {
-              passed: "bg-green-100 text-green-700 border-green-200",
-              offer_sent: "bg-blue-100 text-blue-700 border-blue-200",
-              accepted: "bg-emerald-100 text-emerald-700 border-emerald-200",
-              rejected: "bg-red-100 text-red-700 border-red-200",
-              declined: "bg-red-100 text-red-700 border-red-200",
-              interview_scheduled: "bg-violet-100 text-violet-700 border-violet-200",
-              interview_completed: "bg-indigo-100 text-indigo-700 border-indigo-200",
-              screening: "bg-yellow-100 text-yellow-700 border-yellow-200",
-              submitted: "bg-gray-100 text-gray-700 border-gray-200",
-              draft: "bg-gray-100 text-gray-500 border-gray-200",
-              archived: "bg-slate-100 text-slate-500 border-slate-200",
-            };
-
-            // 基础固定字段（姓名、邮箱 始终展示）
             const BASIC_FIELDS = ["name", "email", "studentId", "phone"];
-            // 长文本字段单独成块展示
-            const LONG_TEXT_FIELDS = new Set(["experience", "motivation", "resumeText", "selfIntro"]);
-
-            // 从 requiredFields 中筛选出短字段（基础固定字段之外的、非长文本的）
             const shortFields = requiredFields.filter(
               (fn) => !BASIC_FIELDS.includes(fn) && !LONG_TEXT_FIELDS.has(fn)
             );
-            // 长文本字段
             const longFields = requiredFields.filter((fn) => LONG_TEXT_FIELDS.has(fn));
 
             const aiScore = app.aiScore != null ? Number(app.aiScore) : null;
             const analysis = app.aiAnalysis;
+            const detailTransitions = TRANSITIONS[app.status as ApplicationStatus] ?? [];
 
             return (
               <div className="space-y-5">
-                {/* ── 顶部信息条 ── */}
+                {/* 顶部信息条 */}
                 <div className="flex items-start justify-between gap-4 pb-2 border-b">
                   <div>
                     <p className="text-xs text-gray-400 mb-1">{app.recruitment?.club?.name || "未知社团"}</p>
@@ -1031,19 +853,43 @@ export default function ResumeScreeningPage() {
                       申请时间：{app.createdAt ? new Date(app.createdAt).toLocaleDateString("zh-CN") : "-"}
                     </p>
                   </div>
-                  <span className={`text-xs font-medium px-2.5 py-1 rounded-full border flex-shrink-0 ${STATUS_COLORS[app.status] ?? "bg-gray-100 text-gray-600 border-gray-200"}`}>
-                    {STATUS_LABELS[app.status] ?? app.status}
+                  <span className={`text-xs font-medium px-2.5 py-1 rounded-full border flex-shrink-0 ${STATUS_STYLES[app.status as ApplicationStatus]?.className ?? "bg-gray-100 text-gray-600 border-gray-200"}`}>
+                    {STATUS_LABELS[app.status as ApplicationStatus] ?? app.status}
                   </span>
                 </div>
 
-                {/* ── 申请人基础信息 ── */}
+                {/* 状态流转操作栏 */}
+                {detailTransitions.length > 0 && (
+                  <div className="flex items-center gap-2 flex-wrap p-3 bg-gray-50 rounded-lg border">
+                    <span className="text-sm font-medium text-gray-700 mr-1">操作：</span>
+                    {detailTransitions.map((target) => {
+                      const isDestructive = target === "rejected" || target === "archived" || target === "declined";
+                      return (
+                        <Button
+                          key={target}
+                          size="sm"
+                          variant={isDestructive ? "outline" : "default"}
+                          className={isDestructive ? "border-red-200 text-red-600 hover:bg-red-50" : ""}
+                          disabled={updateStatusMutation.isPending}
+                          onClick={() => {
+                            closeDetailModal();
+                            openStatusConfirm(app.id, target);
+                          }}
+                        >
+                          {ACTION_LABELS[target] || STATUS_LABELS[target]}
+                        </Button>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* 申请人基础信息 */}
                 <Card>
                   <CardHeader className="pb-3">
                     <CardTitle className="text-base">申请人信息</CardTitle>
                   </CardHeader>
                   <CardContent>
                     <div className="grid grid-cols-2 gap-x-8 gap-y-3 text-sm">
-                      {/* 固定基础字段 */}
                       {[
                         { key: "name", label: "姓名" },
                         { key: "email", label: "邮箱" },
@@ -1059,7 +905,6 @@ export default function ResumeScreeningPage() {
                           </div>
                         );
                       })}
-                      {/* 招新批次 requiredFields 中的短字段 */}
                       {shortFields.map((fn) => {
                         const val = getVal(fn);
                         if (!val) return null;
@@ -1074,7 +919,7 @@ export default function ResumeScreeningPage() {
                   </CardContent>
                 </Card>
 
-                {/* ── 长文本申请内容（相关经验、申请动机等）── */}
+                {/* 长文本申请内容 */}
                 {longFields.length > 0 && (
                   <Card>
                     <CardHeader className="pb-3">
@@ -1095,7 +940,7 @@ export default function ResumeScreeningPage() {
                   </Card>
                 )}
 
-                {/* ── 自定义问题答案 ── */}
+                {/* 自定义问题 */}
                 {customQuestions.length > 0 && (
                   <Card>
                     <CardHeader className="pb-3">
@@ -1120,7 +965,7 @@ export default function ResumeScreeningPage() {
                   </Card>
                 )}
 
-                {/* ── 技能 ── */}
+                {/* 技能 */}
                 {(skills.languages?.length > 0 || skills.frameworks?.length > 0 || skills.tools?.length > 0) && (
                   <Card>
                     <CardHeader className="pb-3">
@@ -1147,7 +992,7 @@ export default function ResumeScreeningPage() {
                   </Card>
                 )}
 
-                {/* ── 经历 ── */}
+                {/* 经历 */}
                 {experiences.length > 0 && (
                   <Card>
                     <CardHeader className="pb-3">
@@ -1163,12 +1008,8 @@ export default function ResumeScreeningPage() {
                                 {exp.year ?? (exp.startDate ? new Date(exp.startDate).getFullYear() : "")}
                               </span>
                             </div>
-                            {exp.type && (
-                              <p className="text-xs text-gray-500 mt-0.5">{exp.type}</p>
-                            )}
-                            {exp.description && (
-                              <p className="text-sm text-gray-600 mt-1">{exp.description}</p>
-                            )}
+                            {exp.type && <p className="text-xs text-gray-500 mt-0.5">{exp.type}</p>}
+                            {exp.description && <p className="text-sm text-gray-600 mt-1">{exp.description}</p>}
                             {exp.skills?.length > 0 && (
                               <div className="flex flex-wrap gap-1 mt-2">
                                 {exp.skills.map((s: string, i: number) => (
@@ -1183,7 +1024,7 @@ export default function ResumeScreeningPage() {
                   </Card>
                 )}
 
-                {/* ── 简历原文 ── */}
+                {/* 简历原文 */}
                 {app.resumeText && (
                   <Card>
                     <CardHeader className="pb-3">
@@ -1195,32 +1036,70 @@ export default function ResumeScreeningPage() {
                   </Card>
                 )}
 
-                {/* ── 附件 ── */}
+                {/* 附件文件 */}
                 {attachments.length > 0 && (
                   <Card>
                     <CardHeader className="pb-3">
-                      <CardTitle className="text-base">附件</CardTitle>
+                      <CardTitle className="text-base">附件文件</CardTitle>
                     </CardHeader>
                     <CardContent>
                       <div className="space-y-2">
-                        {attachments.map((att: any, idx: number) => (
-                          <div key={idx} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                            <div className="flex items-center gap-3">
-                              <span className="text-blue-500">📄</span>
-                              <div>
-                                <p className="text-sm font-medium text-gray-900">{att.originalName || att.filename}</p>
-                                {att.description && <p className="text-xs text-gray-400">{att.description}</p>}
+                        {attachments.map((att: any, idx: number) => {
+                          const FILE_TYPE_LABELS: Record<string, string> = {
+                            resume: "简历", portfolio: "作品集",
+                            certificate: "证书", avatar: "头像", other: "其他",
+                          };
+                          const canPreview = att.previewable ?? filesApi.isPreviewable(att.mimeType ?? "");
+                          return (
+                            <div key={idx} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                              <div className="flex items-center gap-3">
+                                <FileText className="h-4 w-4 text-blue-500 flex-shrink-0" />
+                                <div>
+                                  <p className="text-sm font-medium text-gray-900">
+                                    {att.originalName || att.filename}
+                                  </p>
+                                  <p className="text-xs text-gray-400">
+                                    {att.description && <>{att.description} · </>}
+                                    {FILE_TYPE_LABELS[att.fileType] ?? att.fileType ?? att.type ?? "文件"}
+                                    {att.size && <> · {filesApi.formatSize(att.size)}</>}
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="flex gap-2">
+                                {canPreview && att.viewUrl && (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => window.open(att.viewUrl, "_blank")}
+                                  >
+                                    <Eye className="h-3.5 w-3.5 mr-1" />
+                                    预览
+                                  </Button>
+                                )}
+                                {att.downloadUrl && (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() =>
+                                      filesApi
+                                        .download(att.fileId, att.originalName)
+                                        .catch((e) => console.error("下载失败:", e))
+                                    }
+                                  >
+                                    <Download className="h-3.5 w-3.5 mr-1" />
+                                    下载
+                                  </Button>
+                                )}
                               </div>
                             </div>
-                            <Button variant="outline" size="sm">预览</Button>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     </CardContent>
                   </Card>
                 )}
 
-                {/* ── AI 分析 ── */}
+                {/* AI 分析 */}
                 {aiScore !== null && (
                   <Card>
                     <CardHeader className="pb-3">
@@ -1230,7 +1109,6 @@ export default function ResumeScreeningPage() {
                       </CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-4">
-                      {/* 评分圆形进度感 */}
                       <div className="flex items-center gap-3">
                         <span className={`text-2xl font-bold ${aiScore >= 80 ? "text-green-600" : aiScore >= 60 ? "text-orange-500" : "text-red-500"}`}>
                           {aiScore.toFixed(1)}
@@ -1254,8 +1132,7 @@ export default function ResumeScreeningPage() {
                               <ul className="space-y-1">
                                 {analysis.strengths.map((s: string, i: number) => (
                                   <li key={i} className="flex items-start gap-2 text-sm text-gray-700">
-                                    <CheckCircle className="h-3.5 w-3.5 text-green-500 flex-shrink-0 mt-0.5" />
-                                    {s}
+                                    <CheckCircle className="h-3.5 w-3.5 text-green-500 flex-shrink-0 mt-0.5" />{s}
                                   </li>
                                 ))}
                               </ul>
@@ -1267,8 +1144,7 @@ export default function ResumeScreeningPage() {
                               <ul className="space-y-1">
                                 {analysis.suggestions.map((s: string, i: number) => (
                                   <li key={i} className="flex items-start gap-2 text-sm text-gray-700">
-                                    <Star className="h-3.5 w-3.5 text-yellow-400 flex-shrink-0 mt-0.5" />
-                                    {s}
+                                    <Star className="h-3.5 w-3.5 text-yellow-400 flex-shrink-0 mt-0.5" />{s}
                                   </li>
                                 ))}
                               </ul>
@@ -1279,6 +1155,40 @@ export default function ResumeScreeningPage() {
                       {analysis && typeof analysis === "string" && (
                         <p className="text-sm text-gray-700 whitespace-pre-wrap">{analysis}</p>
                       )}
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* 状态历史 */}
+                {app.statusHistory?.length > 0 && (
+                  <Card>
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-base">操作历史</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-3">
+                        {app.statusHistory.map((h: any) => (
+                          <div key={h.id} className="flex items-start gap-3 text-sm">
+                            <div className={`mt-0.5 w-2 h-2 rounded-full flex-shrink-0 ${STATUS_STYLES[h.status as ApplicationStatus]?.className.split(" ")[0] ?? "bg-gray-300"}`} />
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="font-medium text-gray-900">
+                                  {STATUS_LABELS[h.status as ApplicationStatus] ?? h.status}
+                                </span>
+                                <span className="text-xs text-gray-400 flex-shrink-0">
+                                  {new Date(h.changedAt).toLocaleString("zh-CN")}
+                                </span>
+                              </div>
+                              {h.comment && (
+                                <p className="text-gray-500 mt-0.5 truncate">{h.comment}</p>
+                              )}
+                              {h.changedBy?.name && (
+                                <p className="text-xs text-gray-400 mt-0.5">操作人：{h.changedBy.name}</p>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
                     </CardContent>
                   </Card>
                 )}

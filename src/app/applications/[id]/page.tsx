@@ -8,7 +8,11 @@ import {
   CheckCircle,
   XCircle,
   AlertCircle,
+  FileText,
+  Eye,
+  Download,
 } from "lucide-react";
+import { filesApi } from "@/lib/api/files";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -390,43 +394,76 @@ export default function ApplicationDetailPage() {
       )}
 
       {/* 附件 */}
-      {application.attachments && application.attachments.length > 0 && (
+      {(application as any).files && (application as any).files.length > 0 && (
         <Card className="mb-8">
           <CardHeader>
-            <CardTitle className="text-lg">附件</CardTitle>
+            <CardTitle className="text-lg">附件文件</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
-              {application.attachments.map((attachment, index) => (
-                <div
-                  key={index}
-                  className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="text-blue-600">📄</div>
-                    <div>
-                      <div className="font-medium text-gray-900">
-                        {attachment.originalName}
-                      </div>
-                      <div className="text-sm text-gray-500">
-                        {attachment.description} •{" "}
-                        {attachment.type === "resume" ? "简历" : "其他"}
+              {(application as any).files.map((file: any, index: number) => {
+                const FILE_TYPE_LABELS: Record<string, string> = {
+                  resume: "简历",
+                  portfolio: "作品集",
+                  certificate: "证书",
+                  avatar: "头像",
+                  other: "其他",
+                };
+                const canPreview = file.previewable ?? filesApi.isPreviewable(file.mimeType ?? "");
+                return (
+                  <div
+                    key={index}
+                    className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
+                  >
+                    <div className="flex items-center gap-3">
+                      <FileText className="h-5 w-5 text-blue-500 flex-shrink-0" />
+                      <div>
+                        <div className="font-medium text-gray-900">
+                          {file.originalName}
+                        </div>
+                        <div className="text-sm text-gray-500 flex items-center gap-2">
+                          {file.description && <span>{file.description}</span>}
+                          {file.description && <span>·</span>}
+                          <span>{FILE_TYPE_LABELS[file.fileType] ?? file.fileType}</span>
+                          {file.size && (
+                            <>
+                              <span>·</span>
+                              <span>{filesApi.formatSize(file.size)}</span>
+                            </>
+                          )}
+                        </div>
                       </div>
                     </div>
-                  </div>
 
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      // 这里可以添加下载或预览逻辑
-                      console.log("预览附件:", attachment);
-                    }}
-                  >
-                    预览
-                  </Button>
-                </div>
-              ))}
+                    <div className="flex gap-2">
+                      {canPreview && file.viewUrl && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => window.open(file.viewUrl, "_blank")}
+                        >
+                          <Eye className="h-4 w-4 mr-1" />
+                          预览
+                        </Button>
+                      )}
+                      {file.downloadUrl && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() =>
+                            filesApi.download(file.fileId, file.originalName).catch((e) => {
+                              console.error("下载失败:", e);
+                            })
+                          }
+                        >
+                          <Download className="h-4 w-4 mr-1" />
+                          下载
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </CardContent>
         </Card>

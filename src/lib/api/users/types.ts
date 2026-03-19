@@ -62,8 +62,9 @@ export interface UpdateBasicInfoRequest {
 }
 
 // 更新用户档案字段请求
+// 普通字段传字符串，file 类型字段传 { fileId: string }
 export interface UpdateProfileFieldsRequest {
-  profileFields: { [key: string]: string }
+  profileFields: { [key: string]: string | { fileId: string } }
 }
 
 // 档案字段选项
@@ -92,6 +93,12 @@ export interface ProfileFieldConfig {
   }
   currentValue: string
   fileId?: string | null
+  /** 后端返回的已绑定文件信息（仅 fieldType === 'file' 时有效，否则为 null） */
+  fileInfo?: {
+    fileId: string
+    viewUrl: string
+    downloadUrl: string
+  } | null
 }
 
 // 档案字段配置响应

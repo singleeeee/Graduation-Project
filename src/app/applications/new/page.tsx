@@ -28,12 +28,13 @@ import {
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { Loader2, Plus, X, Upload } from 'lucide-react'
-import { recruitmentApi, registrationFieldsApi } from '@/lib/api'
+import { Loader2, Plus, X, Upload, FileText, Eye, Trash2, CheckCircle2, AlertCircle } from 'lucide-react'
+import { recruitmentApi } from '@/lib/api'
+import { filesApi } from '@/lib/api/files'
+import type { FileCategory } from '@/lib/api/files/types'
 import { useActiveRegistrationFields } from '@/hooks/use-recruitment'
 import { toast } from 'sonner'
 import { useCreateApplication } from '@/hooks/use-applications'
-import type { CreateApplicationRequest } from '@/lib/api/applications/types'
 
 
 export default function NewApplicationPage() {
@@ -43,7 +44,41 @@ export default function NewApplicationPage() {
   
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [experiences, setExperiences] = useState<any[]>([])
-  const [attachments, setAttachments] = useState<any[]>([])
+
+  // 附件上传状态
+  // 每个项记录本地文件信息 + 上传状态 + 服务端返回的 fileId
+  interface AttachmentItem {
+    localFile: File;
+    fileType: FileCategory;
+    description: string;
+    // 上传状态
+    status: 'idle' | 'uploading' | 'success' | 'error';
+    fileId?: string;        // 上传成功后服务端返回
+    errorMsg?: string;
+  }
+  const [attachments, setAttachments] = useState<AttachmentItem[]>([]);
+
+  /** 调用后端接口上传单个附件 */
+  const uploadAttachment = async (index: number) => {
+    const att = attachments[index];
+    if (!att || att.status === 'uploading' || att.status === 'success') return;
+    setAttachments((prev) => prev.map((a, i) => i === index ? { ...a, status: 'uploading', errorMsg: undefined } : a));
+    try {
+      const result = await filesApi.upload({
+        file: att.localFile,
+        category: att.fileType,
+        description: att.description || undefined,
+      });
+      setAttachments((prev) =>
+        prev.map((a, i) => i === index ? { ...a, status: 'success', fileId: result.id } : a)
+      );
+    } catch (err: any) {
+      setAttachments((prev) =>
+        prev.map((a, i) => i === index ? { ...a, status: 'error', errorMsg: err?.message || '上传失败' } : a)
+      );
+      toast.error(`「${att.localFile.name}」上传失败：${err?.message || '请重试'}`);
+    }
+  };
 
   // 获取招新详情
   const { data: recruitmentData, isLoading } = useQuery({
@@ -220,32 +255,54 @@ export default function NewApplicationPage() {
     setIsSubmitting(true)
 
     try {
-      // 准备提交数据，适配新的接口格式
-      const applicationData = {
-        recruitmentId,
-        resumeText: '', // 暂时留空，后续可以添加简历文本输入
-        formData: Object.entries(formData).reduce((acc, [key, value]) => {
-          // 只包含非空值的字段
-          if (value && value.toString().trim() !== '') {
-            acc[key] = value
-          }
-          return acc
-        }, {} as Record<string, any>),
-        experiences: experiences.length > 0 ? experiences : [], // 只有有经历时才包含
-        attachments: attachments.length > 0 ? attachments : [] // 只有有附件时才包含
+      // 将所有未上传的附件自动上传
+      const idleOrErrorIndexes = attachments
+        .map((a, i) => (a.status === 'idle' || a.status === 'error' ? i : -1))
+        .filter((i) => i >= 0);
+      for (const idx of idleOrErrorIndexes) {
+        await uploadAttachment(idx);
       }
 
-      // 使用mutation提交申请
-      await createApplicationMutation.mutateAsync(applicationData as any)
+      // 检查是否有上传失败的附件
+      const freshAttachments = attachments;
+      const failedCount = freshAttachments.filter((a) => a.status === 'error').length;
+      if (failedCount > 0) {
+        toast.error(`${failedCount} 个附件上传失败，请删除失败项后重试`);
+        setIsSubmitting(false);
+        return;
+      }
+
+      // 构建 fileLinks（只包含上传成功的附件）
+      const fileLinks = freshAttachments
+        .filter((a) => a.status === 'success' && a.fileId)
+        .map((a) => ({
+          fileId: a.fileId!,
+          fileType: a.fileType,
+          description: a.description || undefined,
+        }));
+
+      const applicationData = {
+        recruitmentId,
+        formData: Object.entries(formData).reduce((acc, [key, value]) => {
+          if (value && value.toString().trim() !== '') {
+            acc[key] = value;
+          }
+          return acc;
+        }, {} as Record<string, any>),
+        experiences: experiences.length > 0 ? experiences : undefined,
+        fileLinks: fileLinks.length > 0 ? fileLinks : undefined,
+      };
+
+      await createApplicationMutation.mutateAsync(applicationData as any);
       
-      toast.success('申请提交成功！')
-      router.push('/applications') // 跳转到申请列表页面
+      toast.success('申请提交成功！');
+      router.push('/applications');
       
     } catch (error) {
-      console.error('申请提交失败:', error)
-      toast.error('提交失败，请重试')
+      console.error('申请提交失败:', error);
+      toast.error('提交失败，请重试');
     } finally {
-      setIsSubmitting(false)
+      setIsSubmitting(false);
     }
   }
 
@@ -558,99 +615,159 @@ export default function NewApplicationPage() {
               {/* 附件上传 */}
               <div className="space-y-4 border-t pt-6">
                 <div className="flex justify-between items-center">
-                  <h3 className="text-lg font-semibold">附件上传</h3>
-                  <Button 
-                    type="button" 
+                  <div>
+                    <h3 className="text-lg font-semibold">附件上传</h3>
+                    <p className="text-sm text-gray-500 mt-0.5">
+                      支持 PDF, DOC, DOCX, JPG, PNG，单个文件不超过 10 MB
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
                     onClick={() => {
-                      // 这里可以打开文件选择对话框
-                      const input = document.createElement('input')
-                      input.type = 'file'
-                      input.multiple = true
-                      input.accept = '.pdf,.doc,.docx,.jpg,.jpeg,.png'
+                      const input = document.createElement('input');
+                      input.type = 'file';
+                      input.multiple = true;
+                      input.accept = '.pdf,.doc,.docx,.jpg,.jpeg,.png,.gif';
                       input.onchange = (e: any) => {
-                        const files = Array.from(e.target.files)
-                        const newAttachments = files.map(file => ({
-                          file: file,
-                          type: 'resume',
-                          filename: (file as File).name,
-                          originalName: (file as File).name,
-                          description: ''
-                        }))
-                        setAttachments([...attachments, ...newAttachments])
-                      }
-                      input.click()
+                        const files: File[] = Array.from(e.target.files ?? []);
+                        const newItems = files.map((f) => ({
+                          localFile: f,
+                          fileType: 'resume' as FileCategory,
+                          description: '',
+                          status: 'idle' as const,
+                        }));
+                        setAttachments((prev) => [...prev, ...newItems]);
+                      };
+                      input.click();
                     }}
                   >
                     <Upload className="h-4 w-4 mr-1" />
-                    上传文件
+                    选择文件
                   </Button>
                 </div>
-                
+
                 {attachments.length > 0 && (
                   <div className="space-y-2">
-                    {attachments.map((attachment, index) => (
+                    {attachments.map((att, index) => (
                       <Card key={index} className="p-3">
-                        <div className="flex justify-between items-start">
-                          <div className="space-y-2 flex-1">
-                            <div className="flex items-center space-x-2">
-                              <span className="font-medium truncate">{attachment.filename}</span>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => {
-                                  const newAttachments = attachments.filter((_, i) => i !== index)
-                                  setAttachments(newAttachments)
-                                }}
-                              >
-                                <X className="h-4 w-4" />
-                              </Button>
+                        <div className="flex items-start gap-3">
+                          {/* 文件图标 */}
+                          <FileText className="h-5 w-5 text-blue-500 mt-0.5 flex-shrink-0" />
+
+                          <div className="flex-1 min-w-0 space-y-2">
+                            {/* 文件名 + 状态 */}
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-sm font-medium truncate max-w-[200px]">
+                                {att.localFile.name}
+                              </span>
+                              <span className="text-xs text-gray-400">
+                                ({filesApi.formatSize(att.localFile.size)})
+                              </span>
+                              {att.status === 'uploading' && (
+                                <span className="flex items-center gap-1 text-xs text-blue-600">
+                                  <Loader2 className="h-3 w-3 animate-spin" />上传中...
+                                </span>
+                              )}
+                              {att.status === 'success' && (
+                                <span className="flex items-center gap-1 text-xs text-green-600">
+                                  <CheckCircle2 className="h-3 w-3" />上传成功
+                                </span>
+                              )}
+                              {att.status === 'error' && (
+                                <span className="flex items-center gap-1 text-xs text-red-600">
+                                  <AlertCircle className="h-3 w-3" />{att.errorMsg || '上传失败'}
+                                </span>
+                              )}
                             </div>
-                            
+
+                            {/* 类型 + 描述 */}
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                               <div>
-                                <Label className="text-sm">文件类型</Label>
-                                <Select value={attachment.type} onValueChange={(value) => {
-                                  const newAttachments = [...attachments]
-                                  newAttachments[index].type = value
-                                  setAttachments(newAttachments)
-                                }}>
-                                  <SelectTrigger>
+                                <Label className="text-xs text-gray-500">文件类型</Label>
+                                <Select
+                                  value={att.fileType}
+                                  disabled={att.status === 'uploading' || att.status === 'success'}
+                                  onValueChange={(v) =>
+                                    setAttachments((prev) =>
+                                      prev.map((a, i) =>
+                                        i === index ? { ...a, fileType: v as FileCategory } : a
+                                      )
+                                    )
+                                  }
+                                >
+                                  <SelectTrigger className="h-8">
                                     <SelectValue />
                                   </SelectTrigger>
                                   <SelectContent>
                                     <SelectItem value="resume">简历</SelectItem>
-                                    <SelectItem value="certificate">证书</SelectItem>
-                                    <SelectItem value="transcript">成绩单</SelectItem>
                                     <SelectItem value="portfolio">作品集</SelectItem>
+                                    <SelectItem value="certificate">证书</SelectItem>
                                     <SelectItem value="other">其他</SelectItem>
                                   </SelectContent>
                                 </Select>
                               </div>
-                              
                               <div>
-                                <Label className="text-sm">文件描述</Label>
-                                <Input 
-                                  value={attachment.description} 
-                                  onChange={(e) => {
-                                    const newAttachments = [...attachments]
-                                    newAttachments[index].description = e.target.value
-                                    setAttachments(newAttachments)
-                                  }}
-                                  placeholder="请输入文件描述"
+                                <Label className="text-xs text-gray-500">描述（可选）</Label>
+                                <Input
+                                  className="h-8"
+                                  value={att.description}
+                                  disabled={att.status === 'uploading' || att.status === 'success'}
+                                  onChange={(e) =>
+                                    setAttachments((prev) =>
+                                      prev.map((a, i) =>
+                                        i === index ? { ...a, description: e.target.value } : a
+                                      )
+                                    )
+                                  }
+                                  placeholder="简单说明此文件内容"
                                 />
                               </div>
                             </div>
+                          </div>
+
+                          {/* 操作按钮 */}
+                          <div className="flex gap-1 flex-shrink-0">
+                            {(att.status === 'idle' || att.status === 'error') && (
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                className="h-8 text-xs"
+                                onClick={() => uploadAttachment(index)}
+                              >
+                                <Upload className="h-3 w-3 mr-1" />上传
+                              </Button>
+                            )}
+                            {att.status === 'success' && att.fileId && (
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="ghost"
+                                className="h-8 text-xs"
+                                onClick={() => window.open(filesApi.getViewUrl(att.fileId!), '_blank')}
+                              >
+                                <Eye className="h-3 w-3 mr-1" />预览
+                              </Button>
+                            )}
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="ghost"
+                              className="h-8 w-8 p-0 text-gray-400 hover:text-red-500"
+                              disabled={att.status === 'uploading'}
+                              onClick={() =>
+                                setAttachments((prev) => prev.filter((_, i) => i !== index))
+                              }
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
                           </div>
                         </div>
                       </Card>
                     ))}
                   </div>
                 )}
-                
-                <p className="text-sm text-gray-500">
-                  支持的文件格式：PDF, DOC, DOCX, JPG, PNG。单个文件不超过10MB。
-                </p>
               </div>
 
               <div className="flex justify-end gap-4 pt-6 border-t">

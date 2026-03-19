@@ -69,21 +69,22 @@ class UsersApi {
 
   /**
    * 更新用户档案字段
+   * 普通字段传字符串，file 类型字段传 { fileId: string }
    */
   async updateProfileFields(data: UpdateProfileFieldsRequest): Promise<{
     message: string
     updatedFields: string[]
-    profileFields: { [key: string]: string }
+    profileFields: { [key: string]: string | { fileId: string; viewUrl: string; downloadUrl: string } }
   }> {
     const response = await this.axios.put<{
       message: string
       updatedFields: string[]
-      profileFields: { [key: string]: string }
+      profileFields: { [key: string]: string | { fileId: string; viewUrl: string; downloadUrl: string } }
     }>('/users/profile/fields', data)
     return this.handleResponse<{
       message: string
       updatedFields: string[]
-      profileFields: { [key: string]: string }
+      profileFields: { [key: string]: string | { fileId: string; viewUrl: string; downloadUrl: string } }
     }>(response)
   }
 

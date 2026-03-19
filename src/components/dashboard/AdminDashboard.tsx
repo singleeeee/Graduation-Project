@@ -1,9 +1,25 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import {
+  Users,
+  CheckCircle,
+  Clock,
+  XCircle,
+  TrendingUp,
+  Activity,
+  ChevronRight,
+  Loader2,
+} from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { useMenuItems } from "@/hooks/use-permissions";
+import { useAdminDashboard } from "@/hooks/use-applications";
+import type { DashboardActivity } from "@/lib/api";
 
 interface AdminDashboardProps {
   user: {
@@ -25,17 +41,133 @@ interface AdminDashboardProps {
   logout: () => void;
 }
 
+// 状态标签
+const STATUS_LABELS: Record<string, string> = {
+  submitted: "待筛选",
+  screening: "筛选中",
+  passed: "通过",
+  rejected: "拒绝",
+  interview_scheduled: "已安排面试",
+  interview_completed: "面试完成",
+  offer_sent: "已发 Offer",
+  accepted: "已接受",
+  declined: "已拒绝",
+  archived: "已归档",
+  draft: "草稿",
+  application_submitted: "提交申请",
+  status_changed: "状态变更",
+};
+
+// 状态颜色
+const STATUS_COLORS: Record<string, string> = {
+  passed: "bg-green-100 text-green-700",
+  offer_sent: "bg-blue-100 text-blue-700",
+  accepted: "bg-emerald-100 text-emerald-700",
+  rejected: "bg-red-100 text-red-700",
+  declined: "bg-red-100 text-red-700",
+  interview_scheduled: "bg-violet-100 text-violet-700",
+  interview_completed: "bg-indigo-100 text-indigo-700",
+  screening: "bg-yellow-100 text-yellow-700",
+  submitted: "bg-gray-100 text-gray-600",
+  draft: "bg-gray-100 text-gray-400",
+};
+
+// 活动图标颜色
+const ACTIVITY_ICON_COLORS: Record<string, string> = {
+  application_submitted: "bg-blue-500",
+  status_changed: "bg-green-500",
+  offer_sent: "bg-purple-500",
+  interview_scheduled: "bg-orange-500",
+};
+
+function formatRelativeTime(isoString: string): string {
+  const now = Date.now();
+  const diff = now - new Date(isoString).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "刚刚";
+  if (mins < 60) return `${mins} 分钟前`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours} 小时前`;
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `${days} 天前`;
+  return new Date(isoString).toLocaleDateString("zh-CN");
+}
+
+function ActivityItem({ activity }: { activity: DashboardActivity }) {
+  const firstChar = activity.applicantName?.charAt(0) ?? "?";
+  const iconBg = ACTIVITY_ICON_COLORS[activity.type] ?? "bg-gray-400";
+  const statusColor = STATUS_COLORS[activity.status] ?? "bg-gray-100 text-gray-600";
+  const statusLabel = STATUS_LABELS[activity.status] ?? activity.status;
+
+  return (
+    <div className="flex items-start gap-3 p-3 rounded-lg hover:bg-gray-50 transition-colors">
+      <div
+        className={`w-9 h-9 ${iconBg} rounded-full flex items-center justify-center flex-shrink-0`}
+      >
+        <span className="text-white text-sm font-semibold">{firstChar}</span>
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-sm text-gray-800 leading-snug">{activity.content}</p>
+        <div className="flex items-center gap-2 mt-1">
+          <span className="text-xs text-gray-400">{formatRelativeTime(activity.time)}</span>
+          <span className={`text-xs px-1.5 py-0.5 rounded-full ${statusColor}`}>
+            {statusLabel}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function AdminDashboard({ user, logout }: AdminDashboardProps) {
-  // 获取当前路径用于菜单高亮
+  const pathname = usePathname();
   const [currentPath, setCurrentPath] = useState("/");
 
   useEffect(() => {
     if (typeof window !== "undefined") {
       setCurrentPath(window.location.pathname);
     }
-  }, []);
+  }, [pathname]);
 
   const menuItems = useMenuItems(currentPath);
+  const { data: dashboard, isLoading, isError } = useAdminDashboard();
+
+  const stats = dashboard?.stats;
+  const activities = dashboard?.recentActivities ?? [];
+
+  // 统计卡片配置
+  const statCards = [
+    {
+      label: "总候选人",
+      value: stats?.totalApplicants ?? 0,
+      icon: <Users className="h-5 w-5 text-white" />,
+      bg: "bg-blue-500",
+      sub: stats ? `进行中招新 ${stats.activeRecruitments} 个` : undefined,
+    },
+    {
+      label: "已通过",
+      value: stats?.passedCount ?? 0,
+      icon: <CheckCircle className="h-5 w-5 text-white" />,
+      bg: "bg-green-500",
+      sub: stats ? `已发 Offer ${stats.offerSentCount}，已接受 ${stats.acceptedCount}` : undefined,
+    },
+    {
+      label: "待面试",
+      value: stats?.pendingInterviewCount ?? 0,
+      icon: <Clock className="h-5 w-5 text-white" />,
+      bg: "bg-yellow-500",
+      sub: stats
+        ? `待筛选 ${stats.submittedCount}，筛选中 ${stats.screeningCount}`
+        : undefined,
+    },
+    {
+      label: "已拒绝",
+      value: stats?.rejectedCount ?? 0,
+      icon: <XCircle className="h-5 w-5 text-white" />,
+      bg: "bg-red-500",
+      sub: undefined,
+    },
+  ];
 
   return (
     <DashboardLayout
@@ -45,195 +177,116 @@ export function AdminDashboard({ user, logout }: AdminDashboardProps) {
       title="管理员仪表盘"
       theme="admin"
     >
-      {/* 统计卡片 */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-          <div className="flex items-center">
-            <div className="p-3 rounded-full bg-blue-500">
-              <svg
-                className="h-6 w-6 text-white"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z"
-                />
-              </svg>
-            </div>
-            <div className="ml-4">
-              <p className="text-sm font-medium text-gray-600">总候选人</p>
-              <p className="text-2xl font-semibold text-gray-900">156</p>
-            </div>
-          </div>
+      <div className="space-y-6">
+        {/* 欢迎语 */}
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">
+            欢迎回来，{user.name || "管理员"}！
+          </h1>
+          <p className="mt-1 text-gray-500 text-sm">以下是当前的招新数据概览</p>
         </div>
 
-        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-          <div className="flex items-center">
-            <div className="p-3 rounded-full bg-green-500">
-              <svg
-                className="h-6 w-6 text-white"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-                />
-              </svg>
-            </div>
-            <div className="ml-4">
-              <p className="text-sm font-medium text-gray-600">已通过</p>
-              <p className="text-2xl font-semibold text-gray-900">42</p>
-            </div>
-          </div>
+        {/* 统计卡片 */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {statCards.map((card) => (
+            <Card key={card.label} className="border border-gray-200 shadow-sm">
+              <CardContent className="p-5">
+                <div className="flex items-center gap-4">
+                  <div className={`p-2.5 rounded-xl ${card.bg} flex-shrink-0`}>
+                    {card.icon}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs text-gray-500 mb-0.5">{card.label}</p>
+                    {isLoading ? (
+                      <div className="h-7 w-12 bg-gray-100 animate-pulse rounded" />
+                    ) : (
+                      <p className="text-2xl font-bold text-gray-900">{card.value}</p>
+                    )}
+                    {card.sub && !isLoading && (
+                      <p className="text-xs text-gray-400 truncate mt-0.5">{card.sub}</p>
+                    )}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
         </div>
 
-        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-          <div className="flex items-center">
-            <div className="p-3 rounded-full bg-yellow-500">
-              <svg
-                className="h-6 w-6 text-white"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-                />
-              </svg>
-            </div>
-            <div className="ml-4">
-              <p className="text-sm font-medium text-gray-600">待面试</p>
-              <p className="text-2xl font-semibold text-gray-900">28</p>
-            </div>
-          </div>
-        </div>
+        {/* 快速操作 + 最近活动 两列布局 */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* 快速操作 */}
+          <Card className="border border-gray-200 shadow-sm">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2">
+                <TrendingUp className="h-4 w-4 text-blue-500" />
+                快速操作
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <Link href="/admin/recruitment/new-batch">
+                <Button variant="outline" className="w-full justify-between text-sm">
+                  发布新招新
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </Link>
+              <Link href="/admin/screening">
+                <Button variant="outline" className="w-full justify-between text-sm">
+                  简历筛选
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </Link>
+              <Link href="/admin/recruitment">
+                <Button variant="outline" className="w-full justify-between text-sm">
+                  管理招新批次
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </Link>
+              <Link href="/admin/clubs">
+                <Button variant="outline" className="w-full justify-between text-sm">
+                  社团管理
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </Link>
+              <Link href="/admin/users">
+                <Button variant="outline" className="w-full justify-between text-sm">
+                  用户管理
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </Link>
+            </CardContent>
+          </Card>
 
-        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-          <div className="flex items-center">
-            <div className="p-3 rounded-full bg-red-500">
-              <svg
-                className="h-6 w-6 text-white"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M6 18L18 6M6 6l12 12"
-                />
-              </svg>
-            </div>
-            <div className="ml-4">
-              <p className="text-sm font-medium text-gray-600">已拒绝</p>
-              <p className="text-2xl font-semibold text-gray-900">12</p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* 快速操作 */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-8">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">快速操作</h2>
-        <div className="flex flex-wrap gap-4">
-          <Button className="flex items-center space-x-2">
-            <svg
-              className="w-4 h-4"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M12 6v6m0 0v6m0-6h6m-6 0H6"
-              />
-            </svg>
-            <span>发布新职位</span>
-          </Button>
-
-          <Button variant="outline" className="flex items-center space-x-2">
-            <svg
-              className="w-4 h-4"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
-              />
-            </svg>
-            <span>查看候选人</span>
-          </Button>
-
-          <Button variant="outline" className="flex items-center space-x-2">
-            <svg
-              className="w-4 h-4"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
-              />
-            </svg>
-            <span>安排面试</span>
-          </Button>
-        </div>
-      </div>
-
-      {/* 最近活动 */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">最近活动</h2>
-        <div className="space-y-4">
-          <div className="flex items-start space-x-4 p-4 bg-gray-50 rounded-lg">
-            <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
-              <span className="text-white text-sm">王</span>
-            </div>
-            <div className="flex-1">
-              <p className="text-sm text-gray-900">王小明同学提交了申请</p>
-              <p className="text-xs text-gray-500 mt-1">2 分钟前</p>
-            </div>
-          </div>
-
-          <div className="flex items-start space-x-4 p-4 bg-gray-50 rounded-lg">
-            <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center">
-              <span className="text-white text-sm">李</span>
-            </div>
-            <div className="flex-1">
-              <p className="text-sm text-gray-900">李小红通过了第一轮面试</p>
-              <p className="text-xs text-gray-500 mt-1">1 小时前</p>
-            </div>
-          </div>
-
-          <div className="flex items-start space-x-4 p-4 bg-gray-50 rounded-lg">
-            <div className="w-8 h-8 bg-yellow-500 rounded-full flex items-center justify-center">
-              <span className="text-white text-sm">张</span>
-            </div>
-            <div className="flex-1">
-              <p className="text-sm text-gray-900">张三是面试安排已发送</p>
-              <p className="text-xs text-gray-500 mt-1">3 小时前</p>
-            </div>
-          </div>
+          {/* 最近活动 */}
+          <Card className="lg:col-span-2 border border-gray-200 shadow-sm">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Activity className="h-4 w-4 text-blue-500" />
+                最近活动
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {isLoading ? (
+                <div className="flex items-center justify-center py-10 text-gray-400 gap-2">
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                  <span className="text-sm">加载中...</span>
+                </div>
+              ) : isError ? (
+                <div className="text-center py-10 text-sm text-gray-400">
+                  数据加载失败，请刷新页面重试
+                </div>
+              ) : activities.length === 0 ? (
+                <div className="text-center py-10 text-sm text-gray-400">
+                  暂无最近活动
+                </div>
+              ) : (
+                <div className="divide-y divide-gray-50">
+                  {activities.map((activity, idx) => (
+                    <ActivityItem key={idx} activity={activity} />
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </div>
       </div>
     </DashboardLayout>

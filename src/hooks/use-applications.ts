@@ -6,7 +6,8 @@ import type {
   CreateApplicationRequest,
   UpdateApplicationStatusRequest,
   Application,
-  ApplicationDetail 
+  ApplicationDetail,
+  DashboardResponse
 } from '@/lib/api'
 
 /**
@@ -85,6 +86,18 @@ export function useUpdateApplicationStatus() {
       queryClient.invalidateQueries({ queryKey: ['myApplications'] })
       queryClient.invalidateQueries({ queryKey: ['application', id] })
     }
+  })
+}
+
+/**
+ * 获取仪表盘统计数据 Hook
+ */
+export function useAdminDashboard() {
+  return useQuery<DashboardResponse>({
+    queryKey: ['adminDashboard'],
+    queryFn: () => applicationsApi.getDashboard(),
+    staleTime: 2 * 60 * 1000, // 2分钟缓存
+    retry: 1,
   })
 }
 

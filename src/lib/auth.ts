@@ -33,9 +33,14 @@ export async function loginAndSetUser(email: string, password: string) {
     const { setUser } = useAppStore.getState()
     let userPermissions: string[] = []
     
-    // 从角色对象中提取权限
+    // 从角色对象中提取权限（兼容字符串数组和对象数组两种格式）
     if (roleValue && typeof roleValue === 'object' && roleValue.permissions) {
-      userPermissions = roleValue.permissions
+      const perms = roleValue.permissions
+      if (Array.isArray(perms)) {
+        userPermissions = perms.map((p: any) =>
+          typeof p === 'string' ? p : (p?.code ?? '')
+        ).filter(Boolean)
+      }
     }
     
     setUser({
@@ -136,7 +141,10 @@ export async function initializeAuth(): Promise<boolean> {
     if (userProfile.role) {
       if (typeof userProfile.role === 'object' && userProfile.role.code) {
         roleValue = userProfile.role
-        userPermissions = userProfile.role.permissions || []
+        const perms = userProfile.role.permissions || []
+        userPermissions = perms.map((p: any) =>
+          typeof p === 'string' ? p : (p?.code ?? '')
+        ).filter(Boolean)
       } else if (typeof userProfile.role === 'string') {
         roleValue = userProfile.role
       }
@@ -172,7 +180,10 @@ export async function initializeAuth(): Promise<boolean> {
           if (userProfile.role) {
             if (typeof userProfile.role === 'object' && userProfile.role.code) {
               roleValue = userProfile.role
-              userPermissions = userProfile.role.permissions || []
+              const perms = userProfile.role.permissions || []
+              userPermissions = perms.map((p: any) =>
+                typeof p === 'string' ? p : (p?.code ?? '')
+              ).filter(Boolean)
             } else if (typeof userProfile.role === 'string') {
               roleValue = userProfile.role
             }

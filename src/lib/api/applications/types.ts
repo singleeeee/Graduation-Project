@@ -42,13 +42,10 @@ export interface Application {
     description: string;
     achievements: string;
   }>;
-  attachments?: Array<{
-    file: object;
-    type: 'resume' | 'other';
-    filename: string;
-    description: string;
-    originalName: string;
-  }>;
+  /**
+   * 关联的附件文件列表（后端返回字段为 files，每项含 viewUrl/downloadUrl）
+   */
+  files?: import('@/lib/api/files/types').ApplicationFile[];
   aiScore?: number;
   aiAnalysis?: any;
   createdAt: string;
@@ -74,6 +71,10 @@ export interface ApplicationListItem extends Application {
     name: string;
     email: string;
     studentId?: string;
+    phone?: string;
+    college?: string;
+    major?: string;
+    grade?: string;
   };
 }
 
@@ -132,16 +133,23 @@ export interface StatusHistoryItem {
 export interface CreateApplicationRequest {
   recruitmentId: string;
   resumeText?: string;
-  formData: {
-    name: string;
-    studentId: string;
-    phone: string;
-    college?: string;
-    major?: string;
-    experience?: string;
-    motivation?: string;
-    [key: string]: any; // 其他动态字段
-  };
+  formData?: Record<string, any>;
+  skills?: object;
+  experiences?: Array<{
+    type: string;
+    title: string;
+    description?: string;
+    startDate?: string;
+    endDate?: string;
+    skills?: string[];
+    achievements?: string;
+  }>;
+  /** 先调用 POST /files/upload 获得 fileId，再将 fileId 放入此字段关联申请 */
+  fileLinks?: Array<{
+    fileId: string;
+    fileType: import('@/lib/api/files/types').FileCategory;
+    description?: string;
+  }>;
 }
 
 /**
@@ -197,4 +205,40 @@ export interface MyApplicationsResponse {
     total: number;
     pages: number;
   };
+}
+
+/**
+ * 仪表盘统计数据
+ */
+export interface DashboardStats {
+  totalApplicants: number;
+  passedCount: number;
+  pendingInterviewCount: number;
+  rejectedCount: number;
+  submittedCount: number;
+  screeningCount: number;
+  offerSentCount: number;
+  acceptedCount: number;
+  activeRecruitments: number;
+}
+
+/**
+ * 最近活动记录
+ */
+export interface DashboardActivity {
+  type: string;
+  content: string;
+  applicantName: string;
+  recruitmentTitle: string;
+  clubName: string;
+  status: ApplicationStatus;
+  time: string;
+}
+
+/**
+ * 仪表盘响应
+ */
+export interface DashboardResponse {
+  stats: DashboardStats;
+  recentActivities: DashboardActivity[];
 }

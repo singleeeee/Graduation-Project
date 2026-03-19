@@ -3,7 +3,6 @@
 import React, { useState, useEffect } from "react";
 import { useForm, FormProvider, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
 import { useToast } from "@/hooks/use-toast";
 import {
   Card,
@@ -33,12 +32,21 @@ import {
 } from "@/hooks/use-profile";
 import {
   profileBasicInfoSchema,
-  profileFieldSchema,
 } from "@/lib/utils/validations";
 import type {
   ProfileBasicInfoFormData,
   ProfileFieldFormData,
 } from "@/lib/utils/validations";
+import { filesApi } from "@/lib/api/files";
+import {
+  Loader2,
+  Upload,
+  Eye,
+  RefreshCw,
+  FileText,
+  CheckCircle2,
+  AlertCircle,
+} from "lucide-react";
 
 // 解析字段的选项（可能是 JSON 字符串或对象数组）
 function parseFieldOptions(options: any): { label: string; value: string }[] {
@@ -75,12 +83,160 @@ function parseFieldOptions(options: any): { label: string; value: string }[] {
   }
 }
 
-// 动态表单字段组件
+// ─── file 类型字段的上传状态 ────────────────────────────────────────
+type FileUploadStatus = "idle" | "uploading" | "success" | "error";
+
+interface FileFieldState {
+  status: FileUploadStatus;
+  /** 上传成功后返回的 fileId */
+  fileId?: string;
+  errorMsg?: string;
+}
+
+// ─── file 类型字段单独组件 ──────────────────────────────────────────
+interface FileFieldProps {
+  field: ProfileFieldConfig;
+  /** 外部传入当前已绑定的 fileInfo（初始化时从 fieldsConfig 读取） */
+  initialFileInfo?: ProfileFieldConfig["fileInfo"];
+  /** 上传/更换完成后回调将 fileId 通知父表单 */
+  onFileIdChange: (fileId: string | null) => void;
+}
+
+function FileField({ field, initialFileInfo, onFileIdChange }: FileFieldProps) {
+  const [uploadState, setUploadState] = useState<FileFieldState>({ status: "idle" });
+  // 展示当前已绑定的文件信息（如果用户多次更換，这里展示最新的）
+  const [currentFileInfo, setCurrentFileInfo] = useState(initialFileInfo ?? null);
+  // 新选择的本地文件名（上传过程中展示）
+  const [pendingFileName, setPendingFileName] = useState<string | null>(null);
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setPendingFileName(file.name);
+    setUploadState({ status: "uploading" });
+
+    try {
+      const result = await filesApi.upload({
+        file,
+        category: "resume", // 档案字段中的文件默认为 resume 分类
+        description: field.fieldLabel,
+      });
+      setUploadState({ status: "success", fileId: result.id });
+      setCurrentFileInfo(null); // 新文件上传后清除旧文件预览（提交后会刷新）
+      onFileIdChange(result.id);
+    } catch (err: any) {
+      setUploadState({ status: "error", errorMsg: err?.message || "上传失败" });
+      setPendingFileName(null);
+      onFileIdChange(null);
+    }
+    // 清空 input，允许重复选择同一文件
+    e.target.value = "";
+  };
+
+  const inputRef = React.useRef<HTMLInputElement>(null);
+
+  return (
+    <div className="mt-1 space-y-2">
+      {/* 已绑定的旧文件（且还没有新上传的） */}
+      {currentFileInfo && uploadState.status !== "success" && (
+        <div className="flex items-center gap-2 px-3 py-2 bg-blue-50 border border-blue-100 rounded-lg text-sm">
+          <FileText className="h-4 w-4 text-blue-500 flex-shrink-0" />
+          <span className="flex-1 text-blue-700 truncate">已绑定文件</span>
+          <div className="flex gap-1">
+            {currentFileInfo.viewUrl && (
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                className="h-7 text-xs text-blue-600 px-2"
+                onClick={() => window.open(currentFileInfo.viewUrl, "_blank")}
+              >
+                <Eye className="h-3.5 w-3.5 mr-1" />预览
+              </Button>
+            )}
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              className="h-7 text-xs text-gray-600 px-2"
+              onClick={() => inputRef.current?.click()}
+            >
+              <RefreshCw className="h-3.5 w-3.5 mr-1" />更换
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* 新上传状态 */}
+      {uploadState.status === "uploading" && pendingFileName && (
+        <div className="flex items-center gap-2 px-3 py-2 bg-blue-50 border border-blue-100 rounded-lg text-sm">
+          <Loader2 className="h-4 w-4 text-blue-500 animate-spin flex-shrink-0" />
+          <span className="text-blue-700 truncate">{pendingFileName}</span>
+          <span className="text-blue-500 text-xs flex-shrink-0">上传中...</span>
+        </div>
+      )}
+      {uploadState.status === "success" && pendingFileName && (
+        <div className="flex items-center gap-2 px-3 py-2 bg-green-50 border border-green-100 rounded-lg text-sm">
+          <CheckCircle2 className="h-4 w-4 text-green-600 flex-shrink-0" />
+          <span className="flex-1 text-green-700 truncate">{pendingFileName}</span>
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            className="h-7 text-xs text-gray-600 px-2"
+            onClick={() => inputRef.current?.click()}
+          >
+            <RefreshCw className="h-3.5 w-3.5 mr-1" />更换
+          </Button>
+        </div>
+      )}
+      {uploadState.status === "error" && (
+        <div className="flex items-center gap-2 px-3 py-2 bg-red-50 border border-red-100 rounded-lg text-sm">
+          <AlertCircle className="h-4 w-4 text-red-500 flex-shrink-0" />
+          <span className="flex-1 text-red-600 text-xs">{uploadState.errorMsg}</span>
+        </div>
+      )}
+
+      {/* 隐藏的真实 input，通过按钮触发 */}
+      <input
+        ref={inputRef}
+        type="file"
+        accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.gif"
+        className="hidden"
+        onChange={handleFileSelect}
+      />
+
+      {/* 如果无已绑定文件且还没有上传过，展示上传按钮 */}
+      {!currentFileInfo && uploadState.status === "idle" && (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="mt-1"
+          onClick={() => inputRef.current?.click()}
+        >
+          <Upload className="h-3.5 w-3.5 mr-1" />
+          {field.placeholder || "选择文件"}
+        </Button>
+      )}
+      {/* 有已绑定文件且还没有新上传数据时，语注 */}
+      {currentFileInfo && uploadState.status === "idle" && (
+        <p className="text-xs text-gray-400">点击「更换」按钮可上传新文件替换现有绑定</p>
+      )}
+      <p className="text-xs text-gray-400">支持 PDF, DOC, DOCX, JPG, PNG，最大 10 MB</p>
+    </div>
+  );
+}
+
+// ─── 动态表单字段组件 ──────────────────────────────────────────────
 interface DynamicFormFieldProps {
   field: ProfileFieldConfig;
   error?: string;
   value?: string;
   onChange: (value: string) => void;
+  /** file 类型字段上传完成后回调 */
+  onFileIdChange?: (fileId: string | null) => void;
 }
 
 function DynamicFormField({
@@ -88,17 +244,8 @@ function DynamicFormField({
   error,
   value,
   onChange,
+  onFileIdChange,
 }: DynamicFormFieldProps) {
-  const [fileValue, setFileValue] = useState<string>(value || "");
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setFileValue(file.name);
-      onChange(file.name);
-    }
-  };
-
   const renderField = () => {
     switch (field.fieldType) {
       case "text":
@@ -155,19 +302,13 @@ function DynamicFormField({
         );
 
       case "file":
+        // file 类型字段使用专用的 FileField 组件处理
         return (
-          <div className="mt-1">
-            <Input
-              type="file"
-              onChange={handleFileChange}
-              className="file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-primary file:text-primary-foreground hover:file:bg-primary/90"
-            />
-            {fileValue && (
-              <p className="mt-2 text-sm text-gray-600">
-                已选择文件: {fileValue}
-              </p>
-            )}
-          </div>
+          <FileField
+            field={field}
+            initialFileInfo={field.fileInfo}
+            onFileIdChange={onFileIdChange ?? (() => {})}
+          />
         );
 
       default:
@@ -400,6 +541,8 @@ function ProfileFieldsForm() {
   const updateProfileFields = useUpdateProfileFields();
 
   const [formValues, setFormValues] = useState<ProfileFieldFormData>({});
+  // file 类型字段上传后的 fileId 映射 { fieldName -> fileId | null }
+  const [fileIdMap, setFileIdMap] = useState<Record<string, string | null>>({});
   // 用 ref 追踪是否已完成初始化，避免 fieldsConfig 引用变化导致无限循环
   const initializedRef = React.useRef(false);
 
@@ -415,6 +558,8 @@ function ProfileFieldsForm() {
     // 首先处理字段配置中的字段
     if (fieldsConfig.fields.length > 0) {
       fieldsConfig.fields.forEach((field) => {
+        // file 类型字段不参与 formValues，通过 fileIdMap 追踪
+        if (field.fieldType === "file") return;
         // 优先使用字段的currentValue，其次使用profile中的对应字段
         const value =
           field.currentValue ||
@@ -443,14 +588,36 @@ function ProfileFieldsForm() {
     }));
   };
 
+  const handleFileIdChange = (fieldName: string, fileId: string | null) => {
+    setFileIdMap((prev) => ({ ...prev, [fieldName]: fileId }));
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const response = await updateProfileFields.mutateAsync({
-        profileFields: formValues as { [key: string]: string },
+      // 构造提交 payload：普通字段传字符串，file 类型字段传 { fileId }
+      const profileFields: Record<string, string | { fileId: string }> = {
+        ...(formValues as Record<string, string>),
+      };
+      // 追加 file 类型字段（只提交用户刚上传过的，避免覆盖已有绑定）
+      Object.entries(fileIdMap).forEach(([fieldName, fileId]) => {
+        if (fileId) {
+          profileFields[fieldName] = { fileId };
+        }
       });
-      // 手动更新表单值，使用API响应返回的profileFields
-      setFormValues(response.profileFields || {});
+
+      const response = await updateProfileFields.mutateAsync({ profileFields });
+      // 成功后清空 fileIdMap（后端已绑定，下次通过 fieldsConfig 的 fileInfo 展示）
+      setFileIdMap({});
+      // 手动更新普通字段的表单值
+      const newFormValues: ProfileFieldFormData = {};
+      Object.entries(response.profileFields || {}).forEach(([k, v]) => {
+        if (typeof v === "string") {
+          newFormValues[k] = v;
+        }
+        // file 类型字段（对象）不写入 formValues
+      });
+      setFormValues(newFormValues);
     } catch (error) {
       // Error is handled in the mutation
     }
@@ -515,6 +682,11 @@ function ProfileFieldsForm() {
             field={field}
             value={formValues[field.fieldName] || ""}
             onChange={(value) => handleFieldChange(field.fieldName, value)}
+            onFileIdChange={
+              field.fieldType === "file"
+                ? (fileId) => handleFileIdChange(field.fieldName, fileId)
+                : undefined
+            }
           />
         ))}
       </div>

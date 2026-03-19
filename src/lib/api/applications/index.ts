@@ -9,7 +9,8 @@ import type {
   CreateApplicationRequest,
   UpdateApplicationStatusRequest,
   ApplicationQueryParams,
-  MyApplicationsQueryParams
+  MyApplicationsQueryParams,
+  DashboardResponse
 } from './types';
 
 /**
@@ -85,5 +86,14 @@ export const applicationsApi = {
    */
   deleteApplication: async (id: string): Promise<void> => {
     await axiosService.delete<ApiResponse<void>>(`/applications/${id}`);
+  },
+
+  /**
+   * 获取仪表盘统计数据
+   * GET /api/v1/applications/dashboard
+   */
+  getDashboard: async (): Promise<DashboardResponse> => {
+    const response = await axiosService.get<ApiResponse<DashboardResponse>>('/applications/dashboard');
+    return response.data;
   }
 };

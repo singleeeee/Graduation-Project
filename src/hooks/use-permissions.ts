@@ -29,38 +29,35 @@ export function usePermissions() {
     retry: 1,
   });
 
-  // 从profile中提取权限代码数组
-  const userPermissions =
-    userProfile?.permissions?.map((p: { code: string }) => p.code) ||
-    user?.permissions ||
-    [];
+  // 从profile中提取权限代码数组（兼容对象数组和字符串数组两种格式）
+  const normalizePerms = (arr: any[]): string[] =>
+    arr.map((p) => (typeof p === 'string' ? p : p?.code ?? '')).filter(Boolean)
+
+  const userPermissions: string[] = userProfile?.permissions
+    ? normalizePerms(userProfile.permissions)
+    : user?.permissions
+    ? normalizePerms(user.permissions as any[])
+    : [];
+
+  // 具有全部权限的角色（超级管理员）
+  const SUPER_ADMIN_ROLES = ["super_admin", "system_admin"];
+  const isAdminRole = SUPER_ADMIN_ROLES.includes(user?.roleCode ?? "");
 
   // 检查用户是否具有指定权限
   const hasPermission = (permissionCode: string): boolean => {
-    // 超级管理员和系统管理员拥有所有权限
-    if (user?.roleCode === "super_admin" || user?.roleCode === "system_admin") {
-      return true;
-    }
-
+    if (isAdminRole) return true;
     return userPermissions.includes(permissionCode);
   };
 
   // 检查用户是否具有任一权限
   const hasAnyPermission = (permissionCodes: string[]): boolean => {
-    // 超级管理员和系统管理员拥有所有权限
-    if (user?.roleCode === "super_admin" || user?.roleCode === "system_admin") {
-      return true;
-    }
-
+    if (isAdminRole) return true;
     return permissionCodes.some((code) => userPermissions.includes(code));
   };
 
   // 检查用户是否具有所有权限
   const hasAllPermissions = (permissionCodes: string[]): boolean => {
-    // 超级管理员和系统管理员拥有所有权限
-    if (user?.roleCode === "super_admin" || user?.roleCode === "system_admin") {
-      return true;
-    }
+    if (isAdminRole) return true;
 
     return permissionCodes.every((code) => userPermissions.includes(code));
   };
@@ -288,6 +285,7 @@ export function useMenuItems(currentPath: string = "/"): MenuItem[] {
       icon: "🛡️",
       href: "/admin/roles",
       current: currentPath.startsWith("/admin/roles"),
+      // 超级管理员才有角色管理，使用一个不存在的权限让普通管理员看不到；这里空管理员通过 isAdminRole 自动通过
       permission: "role_manage",
     },
     {
@@ -302,42 +300,42 @@ export function useMenuItems(currentPath: string = "/"): MenuItem[] {
       icon: "👤",
       href: "/admin/users",
       current: currentPath.startsWith("/admin/users"),
-      permission: "user_view",
+      permission: "user_manage",
     },
     {
       title: "社团管理",
       icon: "🏢",
       href: "/admin/clubs",
       current: currentPath.startsWith("/admin/clubs"),
-      permission: "user_manage",
+      permission: "club_manage",
     },
     {
       title: "招新管理",
       icon: "📢",
       href: "/admin/recruitment",
       current: currentPath.startsWith("/admin/recruitment"),
-      permission: "recruitment_manage",
+      permissions: ["recruitment_create", "recruitment_update", "recruitment_read"],
     },
     {
       title: "招新信息",
       icon: "👥",
       href: "/recruitment",
       current: currentPath.startsWith("/recruitment"),
-      permission: "recruitment_view",
+      permission: "recruitment_read",
     },
     {
       title: "我的申请",
       icon: "📝",
       href: "/applications",
       current: currentPath.startsWith("/applications"),
-      permission: "view_application_status",
+      permission: "application_read",
     },
     {
       title: "简历筛选",
       icon: "📋",
       href: "/admin/screening",
       current: currentPath.startsWith("/admin/screening"),
-      permission: "application_review",
+      permissions: ["application_read", "application_update"],
     },
     {
       title: "个人信息",
@@ -354,36 +352,32 @@ export function useMenuItems(currentPath: string = "/"): MenuItem[] {
     },
   ];
 
-  // 获取用户角色
-  const userRole = user?.role || "candidate";
+  // 优先用 roleCode，其次尝试解析字符串形式的 role
+  const roleCode =
+    user?.roleCode ||
+    (typeof user?.role === "string" ? user.role : null) ||
+    (typeof user?.role === "object" && user.role !== null
+      ? (user.role as { code?: string }).code
+      : null) ||
+    "candidate";
 
-  // 根据权限过滤菜单项
+  // 候选人角色：只显示候选人允许的菜单
+  const CANDIDATE_MENUS = ["仪表盘", "个人信息", "我的申请", "招新信息"];
+  if (roleCode === "candidate") {
+    return allMenuItems.filter((item) => CANDIDATE_MENUS.includes(item.title));
+  }
+
+  // 管理员角色：根据权限过滤菜单
   return allMenuItems.filter((item) => {
-    // 对于候选人角色，只显示特定的菜单项
-    if (userRole === "candidate") {
-      const candidateAllowedMenus = [
-        "仪表盘",
-        "个人信息",
-        "我的申请",
-        "招新信息",
-      ];
-      return candidateAllowedMenus.includes(item.title);
-    }
-
-    // 对于管理员角色，根据权限过滤
     if (!item.permission && !item.permissions) {
       return true; // 没有权限要求的菜单项总是显示
     }
-
     if (item.permission) {
       return hasPermission(item.permission);
     }
-
     if (item.permissions) {
-      // 可以根据需求配置为任一权限或全部权限
       return hasAnyPermission(item.permissions);
     }
-
     return false;
   });
 }
