@@ -2,7 +2,7 @@
 
 import { useState, createContext, useContext } from "react";
 import Link from "next/link";
-import { Menu } from "lucide-react";
+import { Menu, type LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 // Sidebar Context
@@ -118,11 +118,11 @@ export const SidebarMenuItem = ({
 }) => (
   <div
     className={`
-    flex items-center space-x-3 px-4 py-3 rounded-lg transition-colors
+    flex items-center space-x-3 px-3 py-2.5 rounded-lg transition-all duration-150
     ${
       active
-        ? "bg-blue-50 text-blue-600 border-l-4 border-blue-600 rounded-l-none"
-        : "text-gray-700 hover:bg-gray-100 hover:text-gray-900"
+        ? "bg-blue-600 text-white shadow-sm"
+        : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
     }
     ${className}
   `}
@@ -154,7 +154,7 @@ interface DashboardLayoutProps {
   children: React.ReactNode;
   menuItems: Array<{
     title: string;
-    icon: string;
+    icon: LucideIcon;
     href: string;
     current: boolean;
   }>;
@@ -178,14 +178,14 @@ export function DashboardLayout({
       primary: "blue",
       bg: "bg-blue-600",
       hover: "hover:bg-blue-50",
-      active: "bg-blue-50 text-blue-600 border-l-4 border-blue-600",
+      active: "bg-blue-600 text-white shadow-sm",
       logo: "招",
     },
     candidate: {
       primary: "green",
       bg: "bg-green-600",
       hover: "hover:bg-green-50",
-      active: "bg-green-50 text-green-600 border-l-4 border-green-600",
+      active: "bg-green-600 text-white shadow-sm",
       logo: "候",
     },
   };
@@ -224,23 +224,26 @@ export function DashboardLayout({
 
             {/* Menu Content */}
             <SidebarContent>
-              {menuItems.map((item) => (
-                <Link
-                  key={item.title}
-                  href={item.href}
-                  onClick={() => {
-                    // 在移动端点击菜单项时关闭侧边栏
-                    if (window.innerWidth < 1024) {
-                      toggleSidebar();
-                    }
-                  }}
-                >
-                  <SidebarMenuItem active={item.current}>
-                    <span className="text-xl">{item.icon}</span>
-                    <span className="font-medium">{item.title}</span>
-                  </SidebarMenuItem>
-                </Link>
-              ))}
+              {menuItems.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <Link
+                    key={item.title}
+                    href={item.href}
+                    onClick={() => {
+                      // 在移动端点击菜单项时关闭侧边栏
+                      if (window.innerWidth < 1024) {
+                        toggleSidebar();
+                      }
+                    }}
+                  >
+                    <SidebarMenuItem active={item.current}>
+                      <Icon className="h-[18px] w-[18px] flex-shrink-0" />
+                      <span className="font-medium">{item.title}</span>
+                    </SidebarMenuItem>
+                  </Link>
+                );
+              })}
             </SidebarContent>
           </div>
         </SidebarContainer>

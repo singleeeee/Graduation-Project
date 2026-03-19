@@ -1,6 +1,20 @@
 import { useQuery } from "@tanstack/react-query";
 import { useAppStore } from "@/store";
 import { usersApi, rolesApi, permissionsApi } from "@/lib/api";
+import {
+  LayoutDashboard,
+  ShieldCheck,
+  SlidersHorizontal,
+  UserCog,
+  Building2,
+  Megaphone,
+  Users,
+  FileText,
+  ClipboardList,
+  UserCircle,
+  Settings,
+  type LucideIcon,
+} from "lucide-react";
 
 /**
  * 权限检查 Hook
@@ -256,9 +270,9 @@ export function usePermissionDetail(permissionId: string) {
 /**
  * 菜单项类型定义
  */
-interface MenuItem {
+export interface MenuItem {
   title: string;
-  icon: string;
+  icon: LucideIcon;
   href: string;
   current: boolean;
   permission?: string;
@@ -276,13 +290,13 @@ export function useMenuItems(currentPath: string = "/"): MenuItem[] {
   const allMenuItems: MenuItem[] = [
     {
       title: "仪表盘",
-      icon: "📊",
+      icon: LayoutDashboard,
       href: "/",
       current: currentPath === "/",
     },
     {
       title: "角色管理",
-      icon: "🛡️",
+      icon: ShieldCheck,
       href: "/admin/roles",
       current: currentPath.startsWith("/admin/roles"),
       // 超级管理员才有角色管理，使用一个不存在的权限让普通管理员看不到；这里空管理员通过 isAdminRole 自动通过
@@ -290,62 +304,62 @@ export function useMenuItems(currentPath: string = "/"): MenuItem[] {
     },
     {
       title: "字段管理",
-      icon: "⚙️",
+      icon: SlidersHorizontal,
       href: "/admin/registration-fields",
       current: currentPath.startsWith("/admin/registration-fields"),
       permission: "registration_field_manage",
     },
     {
       title: "用户管理",
-      icon: "👤",
+      icon: UserCog,
       href: "/admin/users",
       current: currentPath.startsWith("/admin/users"),
       permission: "user_manage",
     },
     {
       title: "社团管理",
-      icon: "🏢",
+      icon: Building2,
       href: "/admin/clubs",
       current: currentPath.startsWith("/admin/clubs"),
       permission: "club_manage",
     },
     {
       title: "招新管理",
-      icon: "📢",
+      icon: Megaphone,
       href: "/admin/recruitment",
       current: currentPath.startsWith("/admin/recruitment"),
       permissions: ["recruitment_create", "recruitment_update", "recruitment_read"],
     },
     {
       title: "招新信息",
-      icon: "👥",
+      icon: Users,
       href: "/recruitment",
       current: currentPath.startsWith("/recruitment"),
       permission: "recruitment_read",
     },
     {
       title: "我的申请",
-      icon: "📝",
+      icon: FileText,
       href: "/applications",
       current: currentPath.startsWith("/applications"),
       permission: "application_read",
     },
     {
       title: "简历筛选",
-      icon: "📋",
+      icon: ClipboardList,
       href: "/admin/screening",
       current: currentPath.startsWith("/admin/screening"),
       permissions: ["application_read", "application_update"],
     },
     {
       title: "个人信息",
-      icon: "👤",
+      icon: UserCircle,
       href: "/profile",
       current: currentPath === "/profile",
     },
     {
       title: "系统设置",
-      icon: "🔧",
+      icon: Settings,
       href: "/settings",
       current: currentPath.startsWith("/settings"),
       permission: "system_settings",

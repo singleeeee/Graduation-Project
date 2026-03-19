@@ -235,7 +235,7 @@ export default function ApplicationDetailPage() {
                   <div className="flex justify-between">
                     <span className="text-gray-600">学号:</span>
                     <span>
-                      {application.education.studentId ||
+                      {application.education?.studentId ||
                         application.formData?.studentId}
                     </span>
                   </div>
@@ -245,7 +245,7 @@ export default function ApplicationDetailPage() {
                   <div className="flex justify-between">
                     <span className="text-gray-600">电话:</span>
                     <span>
-                      {application.education.phone ||
+                      {application.education?.phone ||
                         application.formData?.phone}
                     </span>
                   </div>
@@ -255,7 +255,7 @@ export default function ApplicationDetailPage() {
                   <div className="flex justify-between">
                     <span className="text-gray-600">学院:</span>
                     <span>
-                      {application.education.college ||
+                      {application.education?.college ||
                         application.formData?.college}
                     </span>
                   </div>
@@ -265,7 +265,7 @@ export default function ApplicationDetailPage() {
                   <div className="flex justify-between">
                     <span className="text-gray-600">专业:</span>
                     <span>
-                      {application.education.major ||
+                      {application.education?.major ||
                         application.formData?.major}
                     </span>
                   </div>
@@ -275,7 +275,7 @@ export default function ApplicationDetailPage() {
                   <div className="flex justify-between">
                     <span className="text-gray-600">年级:</span>
                     <span>
-                      {application.education.grade ||
+                      {application.education?.grade ||
                         application.formData?.grade}
                     </span>
                   </div>
@@ -469,37 +469,140 @@ export default function ApplicationDetailPage() {
         </Card>
       )}
 
-      {/* AI分析结果 */}
-      {application.aiScore !== null && application.aiAnalysis && (
+      {/* AI分析结果：已提交后始终展示此卡片 */}
+      {application.status !== "draft" && (
         <Card className="mb-8">
           <CardHeader>
-            <CardTitle className="text-lg">AI分析结果</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="flex items-center gap-4">
-                <span className="text-gray-600">综合评分:</span>
-                <Badge
-                  variant={
-                    (application.aiScore || 0) >= 80
-                      ? "default"
-                      : (application.aiScore || 0) >= 60
-                        ? "secondary"
-                        : "destructive"
-                  }
-                >
-                  {application.aiScore || "暂无评分"}
-                </Badge>
-              </div>
-              {application.aiAnalysis && (
-                <div>
-                  <h4 className="font-semibold text-gray-900 mb-2">分析详情</h4>
-                  <p className="text-gray-700 whitespace-pre-wrap">
-                    {application.aiAnalysis}
-                  </p>
-                </div>
+            <CardTitle className="text-lg flex items-center gap-2">
+              ✨ AI 评估结果
+              {application.aiScore == null && (
+                <span className="text-sm font-normal text-gray-400 animate-pulse">评估中...</span>
               )}
-            </div>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {/* 评估中骨架屏 */}
+            {application.aiScore == null ? (
+              <div className="space-y-4 animate-pulse">
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-14 bg-gray-200 rounded" />
+                  <div className="h-5 w-10 bg-gray-100 rounded" />
+                  <div className="h-6 w-16 bg-gray-200 rounded-full" />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  {[1,2,3,4].map((i) => (
+                    <div key={i} className="bg-gray-50 rounded-lg p-3 space-y-2">
+                      <div className="flex justify-between">
+                        <div className="h-3 w-16 bg-gray-200 rounded" />
+                        <div className="h-3 w-6 bg-gray-200 rounded" />
+                      </div>
+                      <div className="h-2 w-full bg-gray-200 rounded-full" />
+                    </div>
+                  ))}
+                </div>
+                <div className="space-y-2 bg-blue-50 rounded-lg px-4 py-3">
+                  <div className="h-3 w-full bg-blue-100 rounded" />
+                  <div className="h-3 w-3/4 bg-blue-100 rounded" />
+                </div>
+                <p className="text-center text-xs text-gray-400 pt-1">
+                  AI 正在分析您的申请材料，通常需要 10~30 秒，请稍候...
+                </p>
+              </div>
+            ) : (
+            /* 评分行 */
+            (() => {
+              const score = Number(application.aiScore);
+              const analysis = application.aiAnalysis as any;
+              return (
+                <>
+                  <div className="flex items-center gap-3">
+                    <span className={`text-4xl font-bold ${score >= 80 ? "text-green-600" : score >= 60 ? "text-orange-500" : "text-red-500"}`}>
+                      {score.toFixed(0)}
+                    </span>
+                    <span className="text-gray-400 self-end mb-1">/ 100</span>
+                    <Badge className={`ml-1 ${score >= 80 ? "bg-green-100 text-green-700" : score >= 60 ? "bg-orange-100 text-orange-700" : "bg-red-100 text-red-700"}`}>
+                      {score >= 80 ? "优秀" : score >= 60 ? "合格" : "待提升"}
+                    </Badge>
+                    {analysis?.recommendation && (
+                      <Badge variant="outline" className={`ml-auto ${
+                        analysis.recommendation === "strongly_recommend" ? "border-green-400 text-green-700" :
+                        analysis.recommendation === "recommend" ? "border-blue-400 text-blue-700" :
+                        analysis.recommendation === "pending" ? "border-yellow-400 text-yellow-700" :
+                        "border-red-400 text-red-700"
+                      }`}>
+                        {analysis.recommendation === "strongly_recommend" ? "强烈推荐" :
+                         analysis.recommendation === "recommend" ? "推荐" :
+                         analysis.recommendation === "pending" ? "待定" : "不推荐"}
+                      </Badge>
+                    )}
+                  </div>
+
+                  {/* 维度分进度条 */}
+                  {analysis?.details && (
+                    <div className="grid grid-cols-2 gap-3">
+                      {([
+                        { key: "motivation", label: "动机热情" },
+                        { key: "experience", label: "相关经验" },
+                        { key: "skills",     label: "技能匹配" },
+                        { key: "expression", label: "表达能力" },
+                      ] as const).map(({ key, label }) => {
+                        const val = analysis.details[key] as number;
+                        return (
+                          <div key={key} className="bg-gray-50 rounded-lg p-3">
+                            <div className="flex justify-between items-center mb-1.5">
+                              <span className="text-sm text-gray-600">{label}</span>
+                              <span className={`text-sm font-semibold ${val >= 80 ? "text-green-600" : val >= 60 ? "text-orange-500" : "text-red-500"}`}>{val}</span>
+                            </div>
+                            <div className="w-full bg-gray-200 rounded-full h-2">
+                              <div
+                                className={`h-2 rounded-full ${val >= 80 ? "bg-green-500" : val >= 60 ? "bg-orange-400" : "bg-red-400"}`}
+                                style={{ width: `${val}%` }}
+                              />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* 总结 */}
+                  {analysis?.summary && (
+                    <p className="text-gray-700 bg-blue-50 rounded-lg px-4 py-3 border-l-2 border-blue-300 text-sm">
+                      {analysis.summary}
+                    </p>
+                  )}
+
+                  {/* 优势 */}
+                  {Array.isArray(analysis?.strengths) && analysis.strengths.length > 0 && (
+                    <div>
+                      <h4 className="font-semibold text-gray-900 mb-2 text-sm">优势亮点</h4>
+                      <ul className="space-y-1.5">
+                        {analysis.strengths.map((s: string, i: number) => (
+                          <li key={i} className="flex items-start gap-2 text-sm text-gray-700">
+                            <span className="text-green-500 mt-0.5">✓</span>{s}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {/* 不足 */}
+                  {Array.isArray(analysis?.weaknesses) && analysis.weaknesses.length > 0 && (
+                    <div>
+                      <h4 className="font-semibold text-gray-900 mb-2 text-sm">待提升方向</h4>
+                      <ul className="space-y-1.5">
+                        {analysis.weaknesses.map((s: string, i: number) => (
+                          <li key={i} className="flex items-start gap-2 text-sm text-gray-600">
+                            <span className="text-orange-400 mt-0.5">→</span>{s}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </>
+              );
+            })()
+            )}
           </CardContent>
         </Card>
       )}

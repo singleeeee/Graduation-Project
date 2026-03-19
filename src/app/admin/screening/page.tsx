@@ -5,6 +5,7 @@ import {
   useApplications,
   useApplicationDetail,
   useUpdateApplicationStatus,
+  useTriggerAiEvaluate,
 } from "@/hooks/use-applications";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useQueryClient } from "@tanstack/react-query";
@@ -76,6 +77,8 @@ import {
   Download,
   Building2,
   FileText,
+  Sparkles,
+  Loader2,
   type LucideIcon,
 } from "lucide-react";
 import { ApplicationStatus } from "@/lib/api/applications/types";
@@ -211,6 +214,7 @@ export default function ResumeScreeningPage() {
 
   // ─── Mutation ────────────────────────────────────────────────
   const updateStatusMutation = useUpdateApplicationStatus();
+  const triggerAiEvaluateMutation = useTriggerAiEvaluate();
 
   // ─── 字段映射 ────────────────────────────────────────────────
   const fieldLabelMap = Object.fromEntries(
@@ -1100,64 +1104,191 @@ export default function ResumeScreeningPage() {
                 )}
 
                 {/* AI 分析 */}
-                {aiScore !== null && (
-                  <Card>
-                    <CardHeader className="pb-3">
+                {(() => {
+                  const isThisPolling = triggerAiEvaluateMutation.isPollingFor(app.id);
+                  const isThisPending = triggerAiEvaluateMutation.isPending && triggerAiEvaluateMutation.variables === app.id;
+                  const isWorking = isThisPending || isThisPolling;
+
+                  const btnLabel = isThisPending
+                    ? "触发中..."
+                    : isThisPolling
+                    ? "分析中..."
+                    : aiScore !== null
+                    ? "重新评估"
+                    : "立即评估";
+
+                  return (
+                <Card>
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center justify-between">
                       <CardTitle className="text-base flex items-center gap-2">
-                        <Star className="h-4 w-4 text-yellow-500" />
-                        AI 评分
+                        <Sparkles className={`h-4 w-4 ${isWorking ? "text-yellow-400 animate-pulse" : "text-yellow-500"}`} />
+                        AI 评估
+                        {isWorking && (
+                          <span className="text-xs font-normal text-gray-400 animate-pulse">正在分析中...</span>
+                        )}
                       </CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                      <div className="flex items-center gap-3">
-                        <span className={`text-2xl font-bold ${aiScore >= 80 ? "text-green-600" : aiScore >= 60 ? "text-orange-500" : "text-red-500"}`}>
-                          {aiScore.toFixed(1)}
-                        </span>
-                        <span className="text-gray-400 text-sm">/ 100</span>
-                        <Badge className={`ml-2 ${aiScore >= 80 ? "bg-green-100 text-green-700" : aiScore >= 60 ? "bg-orange-100 text-orange-700" : "bg-red-100 text-red-700"}`}>
-                          {aiScore >= 80 ? "优秀" : aiScore >= 60 ? "合格" : "待提升"}
-                        </Badge>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={isWorking}
+                        onClick={() => {
+                          triggerAiEvaluateMutation.mutate(app.id, {
+                            onSuccess: () => toast.success("AI 评估已触发，结果将在约 10 秒后更新"),
+                            onError: (err: any) => toast.error(err?.message || "触发失败，请稍后重试"),
+                          });
+                        }}
+                      >
+                        {isWorking ? (
+                          <><Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />{btnLabel}</>
+                        ) : (
+                          <><Sparkles className="h-3.5 w-3.5 mr-1" />{btnLabel}</>
+                        )}
+                      </Button>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    {/* 轮询等待中：骨架屏占位 */}
+                    {isWorking ? (
+                      <div className="space-y-3 animate-pulse">
+                        {/* 评分骨架 */}
+                        <div className="flex items-center gap-3">
+                          <div className="h-8 w-12 bg-gray-200 rounded" />
+                          <div className="h-4 w-8 bg-gray-100 rounded" />
+                          <div className="h-5 w-14 bg-gray-200 rounded-full" />
+                          <div className="h-5 w-16 bg-gray-100 rounded-full ml-auto" />
+                        </div>
+                        {/* 维度分骨架 */}
+                        <div className="grid grid-cols-2 gap-2">
+                          {[1,2,3,4].map((i) => (
+                            <div key={i} className="bg-gray-50 rounded-lg p-2.5 space-y-2">
+                              <div className="flex justify-between">
+                                <div className="h-3 w-14 bg-gray-200 rounded" />
+                                <div className="h-3 w-6 bg-gray-200 rounded" />
+                              </div>
+                              <div className="h-1.5 w-full bg-gray-200 rounded-full" />
+                            </div>
+                          ))}
+                        </div>
+                        {/* 总结骨架 */}
+                        <div className="space-y-1.5 bg-blue-50 rounded-lg px-3 py-2">
+                          <div className="h-3 w-full bg-blue-100 rounded" />
+                          <div className="h-3 w-4/5 bg-blue-100 rounded" />
+                        </div>
+                        {/* 优势骨架 */}
+                        <div className="space-y-1.5">
+                          <div className="h-3 w-10 bg-gray-200 rounded" />
+                          {[1,2].map((i) => (
+                            <div key={i} className="flex items-center gap-2">
+                              <div className="h-3.5 w-3.5 bg-gray-200 rounded-full flex-shrink-0" />
+                              <div className="h-3 bg-gray-100 rounded" style={{ width: `${60 + i * 15}%` }} />
+                            </div>
+                          ))}
+                        </div>
                       </div>
-                      {analysis && typeof analysis === "object" && (
-                        <div className="space-y-3">
-                          {analysis.summary && (
-                            <div>
-                              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">总结</p>
-                              <p className="text-sm text-gray-700">{analysis.summary}</p>
-                            </div>
-                          )}
-                          {Array.isArray(analysis.strengths) && analysis.strengths.length > 0 && (
-                            <div>
-                              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1.5">优势</p>
-                              <ul className="space-y-1">
-                                {analysis.strengths.map((s: string, i: number) => (
-                                  <li key={i} className="flex items-start gap-2 text-sm text-gray-700">
-                                    <CheckCircle className="h-3.5 w-3.5 text-green-500 flex-shrink-0 mt-0.5" />{s}
-                                  </li>
-                                ))}
-                              </ul>
-                            </div>
-                          )}
-                          {Array.isArray(analysis.suggestions) && analysis.suggestions.length > 0 && (
-                            <div>
-                              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1.5">建议</p>
-                              <ul className="space-y-1">
-                                {analysis.suggestions.map((s: string, i: number) => (
-                                  <li key={i} className="flex items-start gap-2 text-sm text-gray-700">
-                                    <Star className="h-3.5 w-3.5 text-yellow-400 flex-shrink-0 mt-0.5" />{s}
-                                  </li>
-                                ))}
-                              </ul>
-                            </div>
+                    ) : aiScore === null ? (
+                      <div className="flex flex-col items-center justify-center py-6 text-gray-400">
+                        <Sparkles className="h-8 w-8 mb-2 opacity-30" />
+                        <p className="text-sm">暂无 AI 评估结果</p>
+                        <p className="text-xs mt-1">点击右上角「立即评估」触发分析</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        {/* 评分 + 推荐标签 */}
+                        <div className="flex items-center gap-3">
+                          <span className={`text-3xl font-bold ${aiScore >= 80 ? "text-green-600" : aiScore >= 60 ? "text-orange-500" : "text-red-500"}`}>
+                            {aiScore.toFixed(0)}
+                          </span>
+                          <span className="text-gray-400 text-sm self-end mb-1">/ 100</span>
+                          <Badge className={`ml-1 ${aiScore >= 80 ? "bg-green-100 text-green-700" : aiScore >= 60 ? "bg-orange-100 text-orange-700" : "bg-red-100 text-red-700"}`}>
+                            {aiScore >= 80 ? "优秀" : aiScore >= 60 ? "合格" : "待提升"}
+                          </Badge>
+                          {analysis?.recommendation && (
+                            <Badge variant="outline" className={`ml-auto ${
+                              analysis.recommendation === "strongly_recommend" ? "border-green-400 text-green-700" :
+                              analysis.recommendation === "recommend" ? "border-blue-400 text-blue-700" :
+                              analysis.recommendation === "pending" ? "border-yellow-400 text-yellow-700" :
+                              "border-red-400 text-red-700"
+                            }`}>
+                              {analysis.recommendation === "strongly_recommend" ? "强烈推荐" :
+                               analysis.recommendation === "recommend" ? "推荐" :
+                               analysis.recommendation === "pending" ? "待定" : "不推荐"}
+                            </Badge>
                           )}
                         </div>
-                      )}
-                      {analysis && typeof analysis === "string" && (
-                        <p className="text-sm text-gray-700 whitespace-pre-wrap">{analysis}</p>
-                      )}
-                    </CardContent>
-                  </Card>
-                )}
+
+                        {/* 维度分 */}
+                        {analysis?.details && (
+                          <div className="grid grid-cols-2 gap-2">
+                            {([
+                              { key: "motivation", label: "动机热情" },
+                              { key: "experience", label: "相关经验" },
+                              { key: "skills",     label: "技能匹配" },
+                              { key: "expression", label: "表达能力" },
+                            ] as const).map(({ key, label }) => {
+                              const val = analysis.details[key] as number;
+                              return (
+                                <div key={key} className="bg-gray-50 rounded-lg p-2.5">
+                                  <div className="flex justify-between items-center mb-1">
+                                    <span className="text-xs text-gray-500">{label}</span>
+                                    <span className={`text-xs font-semibold ${
+                                      val >= 80 ? "text-green-600" : val >= 60 ? "text-orange-500" : "text-red-500"
+                                    }`}>{val}</span>
+                                  </div>
+                                  <div className="w-full bg-gray-200 rounded-full h-1.5">
+                                    <div
+                                      className={`h-1.5 rounded-full ${
+                                        val >= 80 ? "bg-green-500" : val >= 60 ? "bg-orange-400" : "bg-red-400"
+                                      }`}
+                                      style={{ width: `${val}%` }}
+                                    />
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+
+                        {/* 总结 */}
+                        {analysis?.summary && (
+                          <p className="text-sm text-gray-700 bg-blue-50 rounded-lg px-3 py-2 border-l-2 border-blue-300">
+                            {analysis.summary}
+                          </p>
+                        )}
+
+                        {/* 优势 */}
+                        {Array.isArray(analysis?.strengths) && analysis.strengths.length > 0 && (
+                          <div>
+                            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1.5">优势</p>
+                            <ul className="space-y-1">
+                              {analysis.strengths.map((s: string, i: number) => (
+                                <li key={i} className="flex items-start gap-2 text-sm text-gray-700">
+                                  <CheckCircle className="h-3.5 w-3.5 text-green-500 flex-shrink-0 mt-0.5" />{s}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+
+                        {/* 不足 */}
+                        {Array.isArray(analysis?.weaknesses) && analysis.weaknesses.length > 0 && (
+                          <div>
+                            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1.5">不足</p>
+                            <ul className="space-y-1">
+                              {analysis.weaknesses.map((s: string, i: number) => (
+                                <li key={i} className="flex items-start gap-2 text-sm text-gray-600">
+                                  <XCircle className="h-3.5 w-3.5 text-red-400 flex-shrink-0 mt-0.5" />{s}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+                  );
+                })()}
 
                 {/* 状态历史 */}
                 {app.statusHistory?.length > 0 && (

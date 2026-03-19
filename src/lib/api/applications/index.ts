@@ -95,5 +95,16 @@ export const applicationsApi = {
   getDashboard: async (): Promise<DashboardResponse> => {
     const response = await axiosService.get<ApiResponse<DashboardResponse>>('/applications/dashboard');
     return response.data;
-  }
+  },
+
+  /**
+   * 手动触发 AI 评估（管理员）
+   * POST /api/v1/applications/{id}/ai-evaluate
+   */
+  triggerAiEvaluate: async (id: string): Promise<{ message: string }> => {
+    const response = await axiosService.post<ApiResponse<{ message: string }>>(
+      `/applications/${id}/ai-evaluate`
+    );
+    return response.data;
+  },
 };
