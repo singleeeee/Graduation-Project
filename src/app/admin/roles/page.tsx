@@ -256,7 +256,6 @@ export default function RolesManagementPage() {
                 <TableHead>角色名称</TableHead>
                 <TableHead>角色代码</TableHead>
                 <TableHead>描述</TableHead>
-                <TableHead>级别</TableHead>
                 <TableHead>状态</TableHead>
                 <TableHead>权限数量</TableHead>
                 <TableHead>创建时间</TableHead>
@@ -291,7 +290,6 @@ export default function RolesManagementPage() {
                     <TableCell className="font-medium">{role.name}</TableCell>
                     <TableCell>{role.code}</TableCell>
                     <TableCell>{role.description || "-"}</TableCell>
-                    <TableCell>{role.level}</TableCell>
                     <TableCell>
                       <Badge variant={role.isActive ? "default" : "secondary"}>
                         {role.isActive ? "启用" : "禁用"}
@@ -397,7 +395,6 @@ function CreateRoleDialog({
     name: "",
     code: "",
     description: "",
-    level: 1,
     permissionCodes: [],
   });
 
@@ -443,27 +440,6 @@ function CreateRoleDialog({
             placeholder="请输入角色描述"
           />
         </div>
-        <div className="space-y-2">
-          <Label htmlFor="level">角色级别</Label>
-          <Select
-            value={formData.level?.toString()}
-            onValueChange={(value) =>
-              setFormData({ ...formData, level: parseInt(value) })
-            }
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="选择角色级别" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="1">1 - 最低级别</SelectItem>
-              <SelectItem value="5">5 - 普通级别</SelectItem>
-              <SelectItem value="10">10 - 高级级别</SelectItem>
-              <SelectItem value="20">20 - 管理员级别</SelectItem>
-              <SelectItem value="50">50 - 超级管理员</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-
         {/* 权限选择 */}
         <div className="space-y-2">
           <Label>选择权限</Label>
@@ -561,7 +537,6 @@ function EditRoleDialog({
   const [formData, setFormData] = useState<UpdateRoleRequest>({
     name: role.name,
     description: role.description || "",
-    level: role.level,
     isActive: role.isActive,
   });
 
@@ -596,26 +571,6 @@ function EditRoleDialog({
             }
             placeholder="请输入角色描述"
           />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="edit-level">角色级别</Label>
-          <Select
-            value={formData.level?.toString()}
-            onValueChange={(value) =>
-              setFormData({ ...formData, level: parseInt(value) })
-            }
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="选择角色级别" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="1">1 - 最低级别</SelectItem>
-              <SelectItem value="5">5 - 普通级别</SelectItem>
-              <SelectItem value="10">10 - 高级级别</SelectItem>
-              <SelectItem value="20">20 - 管理员级别</SelectItem>
-              <SelectItem value="50">50 - 超级管理员</SelectItem>
-            </SelectContent>
-          </Select>
         </div>
         <div className="flex items-center space-x-2">
           <Switch

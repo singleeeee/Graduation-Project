@@ -77,7 +77,6 @@ interface UserManagementPageProps {
           id: string;
           name: string;
           code: string;
-          level: number;
           permissions: string[];
         }
       | null;
@@ -1173,7 +1172,7 @@ function UserManagementPageContent({ user, logout }: UserManagementPageProps) {
 
 export default function UserManagementPage() {
   return (
-    <ProtectedRoute permission="user_view">
+    <ProtectedRoute permission="user_read">
       <UserManagementPageContent
         user={{
           id: "admin-1",

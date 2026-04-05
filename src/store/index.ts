@@ -7,11 +7,10 @@ interface AppState {
     name: string | null
     email: string | null
     role: string | {
-      id: string
-      name: string
-      code: string
-      level: number
-      permissions: string[]
+    id: string
+    name: string
+    code: string
+    permissions: string[]
     } | null
     permissions: string[]
     roleCode?: string // 新增: 从角色对象中提取的简化角色代码

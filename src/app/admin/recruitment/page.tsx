@@ -1,11 +1,11 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import {
@@ -43,12 +43,14 @@ import {
   useRecruitments,
   useUpdateRecruitmentStatus,
   useDeleteRecruitment,
+  useClubsForSelection,
 } from "@/hooks/use-recruitment";
 import {
   RecruitmentStatus,
   RecruitmentBatch,
 } from "@/lib/api/recruitment/types";
 import { usePermissions } from "@/hooks/use-permissions";
+import { useAppStore } from "@/store";
 import {
   Plus,
   Search,
@@ -57,23 +59,26 @@ import {
   Trash2,
   Eye,
   CheckCircle,
-  XCircle,
   Clock,
   AlertCircle,
-  Pause,
   Archive,
   type LucideIcon,
 } from "lucide-react";
 
 export default function RecruitmentListPage() {
-  console.log("RecruitmentListPage: Component rendering");
   const router = useRouter();
-  const { hasPermission } = usePermissions();
+  const { user } = useAppStore();
+  const { hasPermission, isLoading: permLoading } = usePermissions();
+
+  // 超级管理员拥有 club_manage 权限（可按社团筛选）
+  const isSuperAdmin = hasPermission("club_manage");
+
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<RecruitmentStatus | "all">(
     "all",
   );
+  const [clubFilter, setClubFilter] = useState<string>("all");
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [selectedRecruitmentId, setSelectedRecruitmentId] = useState<
     string | null
@@ -83,64 +88,34 @@ export default function RecruitmentListPage() {
   useEffect(() => {
     const handler = setTimeout(() => {
       setDebouncedSearchTerm(searchTerm);
-    }, 300); // 300ms防抖
-
-    return () => {
-      clearTimeout(handler);
-    };
+    }, 300);
+    return () => clearTimeout(handler);
   }, [searchTerm]);
 
-  // 构建查询参数，使用useMemo缓存，避免每次渲染都创建新对象
+  // 构建查询参数
   const queryParams = React.useMemo(() => {
     return {
       search: debouncedSearchTerm || undefined,
       status: statusFilter !== "all" ? statusFilter : undefined,
+      clubId: clubFilter !== "all" ? clubFilter : undefined,
       page: 1,
-      limit: 10,
+      limit: 50,
     };
-  }, [debouncedSearchTerm, statusFilter]);
+  }, [debouncedSearchTerm, statusFilter, clubFilter]);
 
-  // 获取招新列表数据
-  console.log(
-    "RecruitmentListPage: Calling useRecruitments with params:",
-    queryParams,
-  );
   const {
     data: recruitmentsData,
     isLoading,
     error,
   } = useRecruitments(queryParams);
-  console.log(
-    "RecruitmentListPage: useRecruitments returned data:",
-    recruitmentsData,
-    "isLoading:",
-    isLoading,
-    "error:",
-    error,
-  );
 
-  // 额外调试信息
-  console.log(
-    "RecruitmentListPage: Type of recruitmentsData:",
-    typeof recruitmentsData,
-  );
-  console.log(
-    "RecruitmentListPage: recruitmentsData is Array:",
-    Array.isArray(recruitmentsData),
-  );
-  if (recruitmentsData && Array.isArray(recruitmentsData)) {
-    console.log(
-      "RecruitmentListPage: recruitmentsData length:",
-      recruitmentsData.length,
-    );
-    console.log("RecruitmentListPage: First item:", recruitmentsData[0]);
-  }
+  // 仅 super_admin 加载社团列表用于筛选
+  const { data: clubs = [] } = useClubsForSelection(isSuperAdmin);
 
-  // 状态变更 hooks
   const updateStatusMutation = useUpdateRecruitmentStatus();
   const deleteRecruitmentMutation = useDeleteRecruitment();
 
-  // 状态标签颜色映射
+  // 状态标签
   const getStatusBadge = (status: RecruitmentStatus) => {
     const statusConfig: Record<
       RecruitmentStatus,
@@ -150,23 +125,11 @@ export default function RecruitmentListPage() {
         icon: LucideIcon;
       }
     > = {
-      draft: { label: "草稿", variant: "secondary" as const, icon: Clock },
-      published: {
-        label: "已发布",
-        variant: "default" as const,
-        icon: CheckCircle,
-      },
-      ongoing: { label: "进行中", variant: "default" as const, icon: Clock },
-      finished: {
-        label: "已结束",
-        variant: "outline" as const,
-        icon: CheckCircle,
-      },
-      archived: {
-        label: "已存档",
-        variant: "secondary" as const,
-        icon: Archive,
-      },
+      draft: { label: "草稿", variant: "secondary", icon: Clock },
+      published: { label: "已发布", variant: "default", icon: CheckCircle },
+      ongoing: { label: "进行中", variant: "default", icon: Clock },
+      finished: { label: "已结束", variant: "outline", icon: CheckCircle },
+      archived: { label: "已存档", variant: "secondary", icon: Archive },
     };
 
     const config = statusConfig[status];
@@ -180,35 +143,27 @@ export default function RecruitmentListPage() {
     );
   };
 
-  // 处理状态变更，添加成功/失败反馈
   const handleStatusChange = async (
     id: string,
     newStatus: RecruitmentStatus,
   ) => {
     try {
-      await updateStatusMutation.mutateAsync({
-        id,
-        data: { status: newStatus },
-      });
-      toast.success(`状态更新成功！`);
+      await updateStatusMutation.mutateAsync({ id, data: { status: newStatus } });
+      toast.success("状态更新成功！");
     } catch (error) {
-      console.error("更新状态失败:", error);
       const errorMessage = error instanceof Error ? error.message : "未知错误";
       toast.error(`更新状态失败，请重试。 ${errorMessage}`);
     }
   };
 
-  // 处理删除，添加成功/失败反馈
   const handleDelete = async () => {
     if (!selectedRecruitmentId) return;
-
     try {
       await deleteRecruitmentMutation.mutateAsync(selectedRecruitmentId);
       toast.success("删除成功！");
       setDeleteDialogOpen(false);
       setSelectedRecruitmentId(null);
     } catch (error) {
-      console.error("删除失败:", error);
       const errorMessage = error instanceof Error ? error.message : "未知错误";
       toast.error(`删除失败，请重试。 ${errorMessage}`);
     }
@@ -239,24 +194,14 @@ export default function RecruitmentListPage() {
     );
   }
 
-  // 确保我们有一个数组
+  // 兼容分页对象和数组两种格式
   let recruitments: RecruitmentBatch[] = [];
   if (Array.isArray(recruitmentsData)) {
     recruitments = recruitmentsData;
   } else if (recruitmentsData && typeof recruitmentsData === "object") {
-    // 如果数据是对象格式，尝试提取数组
     const dataObj = recruitmentsData as any;
-    if (dataObj.data && Array.isArray(dataObj.data)) {
-      recruitments = dataObj.data;
-    } else {
-      // 如果无法提取数组，则返回空数组，避免类型错误
-      recruitments = [];
-    }
+    recruitments = Array.isArray(dataObj.data) ? dataObj.data : [];
   }
-  console.log(
-    "RecruitmentListPage: Final processed recruitments:",
-    recruitments,
-  );
 
   return (
     <div className="mx-auto space-y-6">
@@ -268,7 +213,6 @@ export default function RecruitmentListPage() {
           <p className="mt-2 text-gray-600">管理所有招新项目和批次</p>
         </div>
 
-        {/* 操作按钮组，仅在桌面端显示 */}
         <div className="hidden sm:flex gap-2">
           <Button
             variant="secondary"
@@ -286,7 +230,8 @@ export default function RecruitmentListPage() {
 
       <Card>
         <CardHeader>
-          <div className="flex flex-col sm:flex-row gap-4">
+          <div className="flex flex-col sm:flex-row gap-3">
+            {/* 搜索框 */}
             <div className="flex-1 relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
               <Input
@@ -297,7 +242,30 @@ export default function RecruitmentListPage() {
               />
             </div>
 
-            <div className="w-full sm:w-48">
+            {/* 社团筛选：仅 super_admin 可见，等权限加载完再渲染避免闪烁 */}
+            {!permLoading && isSuperAdmin && (
+              <div className="w-full sm:w-44">
+                <Select
+                  value={clubFilter}
+                  onValueChange={setClubFilter}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="按社团筛选" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">全部社团</SelectItem>
+                    {(clubs as any[]).map((club: any) => (
+                      <SelectItem key={club.id} value={club.id}>
+                        {club.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {/* 状态筛选 */}
+            <div className="w-full sm:w-40">
               <Select
                 value={statusFilter}
                 onValueChange={(value) =>
@@ -324,7 +292,10 @@ export default function RecruitmentListPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-[300px]">标题</TableHead>
+                  <TableHead className="w-[280px]">标题</TableHead>
+                  {!permLoading && isSuperAdmin && (
+                    <TableHead className="hidden lg:table-cell">社团</TableHead>
+                  )}
                   <TableHead className="hidden sm:table-cell">
                     创建时间
                   </TableHead>
@@ -338,7 +309,10 @@ export default function RecruitmentListPage() {
               <TableBody>
                 {recruitments.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="h-24 text-center">
+                    <TableCell
+                      colSpan={!permLoading && isSuperAdmin ? 6 : 5}
+                      className="h-24 text-center"
+                    >
                       暂无招新数据
                     </TableCell>
                   </TableRow>
@@ -358,16 +332,22 @@ export default function RecruitmentListPage() {
                           </p>
                         </div>
                       </TableCell>
+                      {!permLoading && isSuperAdmin && (
+                        <TableCell className="hidden lg:table-cell text-sm text-gray-600">
+                          {(recruitment as any).club?.name ?? "—"}
+                        </TableCell>
+                      )}
                       <TableCell className="hidden sm:table-cell">
                         <div className="text-sm text-gray-500">
                           {recruitment.createdAt
-                            ? new Date(
-                                recruitment.createdAt,
-                              ).toLocaleDateString("zh-CN", {
-                                year: "numeric",
-                                month: "long",
-                                day: "numeric",
-                              })
+                            ? new Date(recruitment.createdAt).toLocaleDateString(
+                                "zh-CN",
+                                {
+                                  year: "numeric",
+                                  month: "long",
+                                  day: "numeric",
+                                },
+                              )
                             : "N/A"}
                         </div>
                       </TableCell>

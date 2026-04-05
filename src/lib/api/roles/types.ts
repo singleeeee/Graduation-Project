@@ -4,7 +4,6 @@ export interface Role {
   name: string
   code: string
   description?: string
-  level: number
   isActive: boolean
   createdAt: string
   updatedAt: string
@@ -36,19 +35,17 @@ export interface RoleDetail extends Role {
 
 // 创建角色请求
 export interface CreateRoleRequest {
-  name: string
-  code: string
-  description?: string
-  level?: number
-  permissionCodes?: string[]
+name: string
+code: string
+description?: string
+permissionCodes?: string[]
 }
 
 // 更新角色请求
 export interface UpdateRoleRequest {
-  name?: string
-  description?: string
-  level?: number
-  isActive?: boolean
+name?: string
+description?: string
+isActive?: boolean
 }
 
 // 分配权限给角色
@@ -71,7 +68,6 @@ export interface RoleListParams {
   page?: number
   limit?: number
   search?: string
-  level?: number
   isActive?: boolean
   sortBy?: string
   sortOrder?: 'asc' | 'desc'

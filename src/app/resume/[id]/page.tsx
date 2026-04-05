@@ -60,13 +60,6 @@ export default function ResumeDetailPage() {
           color: "text-yellow-600",
           bgColor: "bg-yellow-50",
         };
-      case "passed":
-        return {
-          label: "通过",
-          icon: CheckCircle,
-          color: "text-green-600",
-          bgColor: "bg-green-50",
-        };
       case "rejected":
         return {
           label: "未通过",
@@ -235,7 +228,7 @@ export default function ResumeDetailPage() {
                   <div className="flex justify-between">
                     <span className="text-gray-600">学号:</span>
                     <span>
-                      {application.education.studentId ||
+                      {application.education?.studentId ||
                         application.formData?.studentId}
                     </span>
                   </div>
@@ -245,7 +238,7 @@ export default function ResumeDetailPage() {
                   <div className="flex justify-between">
                     <span className="text-gray-600">电话:</span>
                     <span>
-                      {application.education.phone ||
+                      {application.education?.phone ||
                         application.formData?.phone}
                     </span>
                   </div>
@@ -255,7 +248,7 @@ export default function ResumeDetailPage() {
                   <div className="flex justify-between">
                     <span className="text-gray-600">学院:</span>
                     <span>
-                      {application.education.college ||
+                      {application.education?.college ||
                         application.formData?.college}
                     </span>
                   </div>
@@ -265,7 +258,7 @@ export default function ResumeDetailPage() {
                   <div className="flex justify-between">
                     <span className="text-gray-600">专业:</span>
                     <span>
-                      {application.education.major ||
+                      {application.education?.major ||
                         application.formData?.major}
                     </span>
                   </div>
@@ -275,7 +268,7 @@ export default function ResumeDetailPage() {
                   <div className="flex justify-between">
                     <span className="text-gray-600">年级:</span>
                     <span>
-                      {application.education.grade ||
+                      {application.education?.grade ||
                         application.formData?.grade}
                     </span>
                   </div>

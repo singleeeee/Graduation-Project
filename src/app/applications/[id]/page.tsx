@@ -60,13 +60,6 @@ export default function ApplicationDetailPage() {
           color: "text-yellow-600",
           bgColor: "bg-yellow-50",
         };
-      case "passed":
-        return {
-          label: "通过",
-          icon: CheckCircle,
-          color: "text-green-600",
-          bgColor: "bg-green-50",
-        };
       case "rejected":
         return {
           label: "未通过",

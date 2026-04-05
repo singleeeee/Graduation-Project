@@ -1,7 +1,7 @@
 /**
  * 文件分类
  */
-export type FileCategory = 'resume' | 'avatar' | 'portfolio' | 'certificate' | 'other';
+export type FileCategory = 'resume' | 'avatar' | 'portfolio' | 'certificate' | 'logo' | 'other';
 
 /**
  * 上传文件响应（注意后端有两层 data 嵌套）

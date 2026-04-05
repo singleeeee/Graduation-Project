@@ -46,12 +46,6 @@ export default function ApplicationsPage() {
           icon: AlertCircle,
           color: "text-yellow-600",
         };
-      case "passed":
-        return {
-          label: "通过",
-          icon: CheckCircle,
-          color: "text-green-600",
-        };
       case "rejected":
         return {
           label: "未通过",

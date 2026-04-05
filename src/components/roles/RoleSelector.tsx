@@ -225,13 +225,11 @@ export function MultiRoleSelector({
 interface RoleBadgeProps {
   roleCode: string
   size?: 'sm' | 'md' | 'lg'
-  showLevel?: boolean
 }
 
 export function RoleBadge({ 
   roleCode, 
   size = 'md', 
-  showLevel = true 
 }: RoleBadgeProps) {
   const { data: roleData } = useQuery({
     queryKey: ['roleByCode', roleCode],
@@ -258,11 +256,6 @@ export function RoleBadge({
       }`}
     >
       {role.name}
-      {showLevel && (
-        <span className="ml-1 text-xs opacity-80">
-          (L{role.level})
-        </span>
-      )}
       {!role.isActive && (
         <span className="ml-1 text-xs">(已禁用)</span>
       )}

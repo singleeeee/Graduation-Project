@@ -110,35 +110,34 @@ class ClubsApi {
     const queryParams = new URLSearchParams({
       page: page.toString(),
       limit: limit.toString(),
-      role
     })
 
+    // role 为 'all' 时不传，后端只接受 'admin' | 'candidate'
+    if (role && role !== 'all') queryParams.append('role', role)
     if (search) queryParams.append('search', search)
 
     const response = await axiosService.get<any>(`/clubs/${clubId}/members?${queryParams}`)
-    console.log(response, '@')
-    
-    // 处理API响应，可能是直接数组或包装对象
-    const membersData = response.data || response
-    
+
+    // axios 拦截器已剥掉 HTTP 层，response 是 { code, message, data, success }
+    // data 字段是后端 getMembers 返回的 { data[], total, page, limit, totalPages }
+    const membersData = response?.data ?? response
+
     if (Array.isArray(membersData)) {
-      // 直接返回成员数组
       return {
         data: membersData,
         total: membersData.length,
-        page: page,
-        limit: limit,
+        page,
+        limit,
         totalPages: Math.ceil(membersData.length / limit)
       }
-    } else {
-      // 包装的对象格式
-      return {
-        data: membersData.data || [],
-        total: membersData.total || membersData.pagination?.total || 0,
-        page: membersData.page || page,
-        limit: membersData.limit || limit,
-        totalPages: membersData.totalPages || 1
-      }
+    }
+
+    return {
+      data: membersData?.data ?? [],
+      total: membersData?.total ?? 0,
+      page: membersData?.page ?? page,
+      limit: membersData?.limit ?? limit,
+      totalPages: membersData?.totalPages ?? 1,
     }
   }
 

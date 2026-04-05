@@ -1257,7 +1257,7 @@ function RegistrationFieldsPageContent({
 
 export default function RegistrationFieldsPage() {
   return (
-    <ProtectedRoute permission="registration_field_manage">
+    <ProtectedRoute permission="registrationfield_manage">
       <RegistrationFieldsPageContent
         user={{
           id: "admin-1",

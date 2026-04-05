@@ -1,15 +1,14 @@
-export type ApplicationStatus = 
-  | 'draft'        // 草稿
-  | 'submitted'    // 已提交
-  | 'screening'    // 筛选中
-  | 'passed'       // 通过筛选
-  | 'rejected'     // 未通过
-  | 'interview_scheduled'  // 已安排面试
+export type ApplicationStatus =
+  | 'draft'                // 草稿
+  | 'submitted'            // 已提交，待筛选
+  | 'screening'            // 筛选中
+  | 'interview_scheduled'  // 通过筛选，已安排面试
   | 'interview_completed'  // 面试完成
-  | 'offer_sent'   // 已发offer
-  | 'accepted'     // 已接受
-  | 'declined'     // 已拒绝
-  | 'archived';    // 已归档
+  | 'offer_sent'           // 已发 offer
+  | 'accepted'             // 候选人已接受
+  | 'declined'             // 候选人已婉拒
+  | 'rejected'             // 管理员拒绝
+  | 'archived';            // 已归档
 
 /**
  * 申请记录基础类型
@@ -220,6 +219,10 @@ export interface DashboardStats {
   offerSentCount: number;
   acceptedCount: number;
   activeRecruitments: number;
+  // super_admin 专用字段
+  totalClubs: number | null;
+  totalBatches: number | null;
+  usersByRole: Array<{ roleCode: string; roleName: string; count: number }> | null;
 }
 
 /**

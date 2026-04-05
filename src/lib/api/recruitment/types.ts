@@ -71,6 +71,7 @@ export interface RecruitmentQueryParams {
   page?: number
   limit?: number
   status?: RecruitmentStatus
+  clubId?: string
   department?: string
   position?: string
   search?: string

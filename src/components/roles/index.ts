@@ -3,8 +3,6 @@ export { RoleSelector } from './RoleSelector'
 export { MultiRoleSelector } from './RoleSelector'
 export { RoleBadge } from './RoleSelector'
 export { PermissionGuard } from './PermissionGuard'
-export { AdminGuard } from './PermissionGuard'
-export { SuperAdminGuard } from './PermissionGuard'
 export { ProtectedRoute } from './PermissionGuard'
 
 // 角色管理相关的类型和工具

@@ -18,13 +18,13 @@ export default function RegisterPage() {
   
   const registerMutation = useMutation({
     mutationFn: async (data: any) => {
-      // 分离基础字段和动态字段
-      const { confirmPassword, ...profileFields } = data
+      // 分离基础字段和动态字段（排除 name/email/password/confirmPassword）
+      const { name, email, password, confirmPassword, ...profileFields } = data
       
       const registerData = {
-        name: data.name,
-        email: data.email,
-        password: data.password,
+        name,
+        email,
+        password,
         profileFields
       }
       
@@ -64,7 +64,7 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="min-h-screen w-full h-full flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
+    <div className="min-h-screen w-full flex items-start justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4 py-8">
       <div className="max-w-md md:max-w-lg w-full">
         <Card className="backdrop-blur-sm bg-white/70">
           <CardHeader className="text-center">

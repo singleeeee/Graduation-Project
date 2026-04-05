@@ -6,13 +6,14 @@ import { useRouter, usePathname } from "next/navigation";
 import { ProfileDashboard } from "@/components/dashboard/ProfileDashboard";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { logout } from "@/lib/auth";
-import { useMenuItems } from "@/hooks/use-permissions";
+import { useMenuItems, usePermissions } from "@/hooks/use-permissions";
 
 export default function ProfilePage() {
   const { user, isAuthenticated } = useAppStore();
   const router = useRouter();
   const pathname = usePathname();
   const menuItems = useMenuItems(pathname);
+  const { hasPermission } = usePermissions();
 
   // 设置页面标题
   useEffect(() => {
@@ -42,16 +43,9 @@ export default function ProfilePage() {
     }
   };
 
-  // 根据用户角色选择主题
+  // 根据用户权限选择主题
   const getTheme = () => {
-    if (typeof user.role === "object") {
-      return user.role.code === "admin" || user.role.code === "super_admin"
-        ? "admin"
-        : "candidate";
-    }
-    return user.role === "admin" || user.role === "super_admin"
-      ? "admin"
-      : "candidate";
+    return hasPermission("user_read") ? "admin" : "candidate";
   };
 
   return (

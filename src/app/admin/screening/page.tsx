@@ -89,8 +89,7 @@ import { filesApi } from "@/lib/api/files";
 const TRANSITIONS: Record<ApplicationStatus, ApplicationStatus[]> = {
   draft: [],
   submitted: ["screening", "rejected", "archived"],
-  screening: ["passed", "rejected", "archived"],
-  passed: ["interview_scheduled", "rejected", "archived"],
+  screening: ["interview_scheduled", "rejected", "archived"],
   interview_scheduled: ["interview_completed", "rejected", "archived"],
   interview_completed: ["offer_sent", "rejected", "archived"],
   offer_sent: ["accepted", "declined", "archived"],
@@ -105,7 +104,6 @@ const STATUS_LABELS: Record<ApplicationStatus, string> = {
   draft: "草稿",
   submitted: "待筛选",
   screening: "筛选中",
-  passed: "通过筛选",
   rejected: "已拒绝",
   interview_scheduled: "已安排面试",
   interview_completed: "面试完成",
@@ -119,7 +117,6 @@ const STATUS_LABELS: Record<ApplicationStatus, string> = {
 const STATUS_STYLES: Record<ApplicationStatus, { className: string; icon: LucideIcon }> = {
   submitted:           { className: "bg-gray-100 text-gray-700 border-gray-300",       icon: Clock },
   screening:           { className: "bg-blue-100 text-blue-700 border-blue-300",        icon: Star },
-  passed:              { className: "bg-green-100 text-green-700 border-green-300",     icon: CheckCircle },
   rejected:            { className: "bg-red-100 text-red-700 border-red-300",           icon: XCircle },
   interview_scheduled: { className: "bg-purple-100 text-purple-700 border-purple-300", icon: Clock },
   interview_completed: { className: "bg-amber-100 text-amber-700 border-amber-300",    icon: CheckCircle },
@@ -133,9 +130,8 @@ const STATUS_STYLES: Record<ApplicationStatus, { className: string; icon: Lucide
 // 操作按钮文案
 const ACTION_LABELS: Partial<Record<ApplicationStatus, string>> = {
   screening: "开始筛选",
-  passed: "通过筛选",
   rejected: "拒绝",
-  interview_scheduled: "安排面试",
+  interview_scheduled: "通过筛选→安排面试",
   interview_completed: "完成面试",
   offer_sent: "发送 Offer",
   accepted: "标记接受",
@@ -528,7 +524,7 @@ export default function ResumeScreeningPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="screening">批量开始筛选</SelectItem>
-                    <SelectItem value="passed">批量通过筛选</SelectItem>
+                    <SelectItem value="interview_scheduled">批量通过筛选→安排面试</SelectItem>
                     <SelectItem value="rejected">批量拒绝</SelectItem>
                     <SelectItem value="archived">批量归档</SelectItem>
                   </SelectContent>
@@ -718,7 +714,7 @@ export default function ResumeScreeningPage() {
               {filters.search && ` (从 ${applications.length} 条中筛选)`}
             </div>
             <div className="flex gap-4 text-xs">
-              {(["submitted","screening","passed","rejected"] as ApplicationStatus[]).map((s) => (
+              {(["submitted","screening","interview_scheduled","rejected"] as ApplicationStatus[]).map((s) => (
                 <span key={s}>
                   {STATUS_LABELS[s]}:{" "}
                   <span className="font-semibold">

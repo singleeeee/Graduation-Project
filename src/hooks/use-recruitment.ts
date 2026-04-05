@@ -35,7 +35,7 @@ export function usePublicRecruitment(id: string) {
 
 export function useRecruitments(params?: RecruitmentQueryParams) {
   return useQuery({
-    queryKey: ["recruitments", params?.search, params?.status, params?.page, params?.limit],
+    queryKey: ["recruitments", params?.search, params?.status, params?.clubId, params?.page, params?.limit],
     queryFn: () => recruitmentApi.getRecruitments(params),
     staleTime: 2 * 60 * 1000, // 2分钟缓存
     select: (data) => data.data,
@@ -122,7 +122,7 @@ export function useCreateRecruitmentBatch() {
 }
 
 // 管理员使用的Hook - 添加缺失的导出
-export function useClubsForSelection() {
+export function useClubsForSelection(enabled = true) {
   return useQuery({
     queryKey: ["clubsForSelection"],
     queryFn: async () => {
@@ -132,10 +132,10 @@ export function useClubsForSelection() {
         const result = await clubsApi.getClubs({ limit: 100 });
         return result;
       } catch (error) {
-        console.error("Failed to fetch clubs:", error);
         return { data: [] };
       }
     },
+    enabled,
     select: (data: any) => {
       // clubsApi.getClubs 已经规范化返回 ClubListResponse { data: Club[] }
       return data?.data || [];
@@ -149,9 +149,7 @@ export function useRegistrationFieldsForSelection() {
     queryFn: async () => {
       try {
         const { registrationFieldsApi } = require("@/lib/api");
-        // 获取所有活跃的注册字段，用于表单构建
         const result = await registrationFieldsApi.getActiveFields();
-        console.log("Registration fields API result:", result);
         return result;
       } catch (error) {
         console.error("Failed to fetch registration fields:", error);
@@ -159,7 +157,6 @@ export function useRegistrationFieldsForSelection() {
       }
     },
     select: (data) => {
-      console.log("Registration fields selection data:", data);
       // 处理不同的响应格式
       let fieldsArray: any[] = [];
       if (Array.isArray(data?.data)) {
@@ -192,8 +189,8 @@ export function useActiveRegistrationFields() {
       } else if (Array.isArray(data)) {
         fieldsArray = data;
       }
-      // 只返回isForRecruitment为true的字段，因为这个钩子用于申请表单
-      return fieldsArray.filter((field) => field.isForRecruitment);
+      // 返回所有激活字段，由调用方（申请表单）根据 recruitment.requiredFields 自行筛选
+      return fieldsArray;
     },
     staleTime: 5 * 60 * 1000, // 5分钟缓存
   });

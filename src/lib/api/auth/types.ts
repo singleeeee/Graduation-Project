@@ -30,7 +30,6 @@ export interface LoginResponse {
       id: string
       name: string
       code: string
-      level: number
       permissions: string[]
     }
     permissions: string[]
@@ -57,7 +56,6 @@ export interface UserProfileBasic {
     id: string
     name: string
     code: string
-    level: number
     permissions?: string[]
   }
   permissions: string[]

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback, useRef, memo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAppStore } from "@/store";
 import { useToast } from "@/hooks/use-toast";
@@ -58,7 +58,8 @@ import {
 } from "@/components/ui/form";
 import { Badge } from "@/components/ui/badge";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
-import { clubsApi, usersApi } from "@/lib/api";
+import { clubsApi, usersApi, filesApi } from "@/lib/api";
+import { useDebounce } from "@/hooks/use-debounce";
 import type {
   Club,
   ClubListParams,
@@ -532,9 +533,152 @@ function ClubManagementPageContent({
             <DialogTitle>成员管理 - {selectedClub?.name}</DialogTitle>
             <DialogDescription>管理社团成员和权限</DialogDescription>
           </DialogHeader>
-          {selectedClub && <ClubMembersManagement clubId={selectedClub.id} />}
+          {/* key 绑定 clubId：切换社团时重置组件，同一社团内不重建（避免输入 focus 丢失） */}
+          <ClubMembersManagement key={selectedClub?.id ?? "none"} clubId={selectedClub?.id ?? ""} />
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+// 社团 Logo 上传控件（复用于创建/编辑）
+function LogoUploader({
+  value,
+  onChange,
+}: {
+  value?: string;
+  onChange: (url: string) => void;
+}) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const [preview, setPreview] = useState<string | undefined>(value);
+  const [mode, setMode] = useState<"upload" | "url">("upload");
+  const [urlInput, setUrlInput] = useState(value || "");
+  const { toast } = useToast();
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // 本地预览
+    const objectUrl = URL.createObjectURL(file);
+    setPreview(objectUrl);
+
+    setUploading(true);
+    try {
+      const uploaded = await filesApi.upload({ file, category: "logo" as any });
+      const viewUrl = filesApi.getViewUrl(uploaded.id);
+      onChange(viewUrl);
+      toast({ title: "上传成功", description: "社团 Logo 已上传" });
+    } catch (err: any) {
+      setPreview(value); // 回滚预览
+      toast({
+        title: "上传失败",
+        description: err?.response?.data?.message || "图片上传失败，请重试",
+        variant: "destructive",
+      });
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  const handleUrlConfirm = () => {
+    const trimmed = urlInput.trim();
+    if (!trimmed) return;
+    setPreview(trimmed);
+    onChange(trimmed);
+    toast({ title: "已设置", description: "Logo URL 已更新" });
+  };
+
+  return (
+    <div className="space-y-3">
+      {/* 预览区 */}
+      <div className="flex items-center gap-4">
+        <div className="w-16 h-16 rounded-lg border-2 border-dashed border-gray-300 flex items-center justify-center bg-gray-50 overflow-hidden flex-shrink-0">
+          {preview ? (
+            <img
+              src={preview}
+              alt="Logo 预览"
+              className="w-full h-full object-cover rounded-lg"
+              onError={() => setPreview(undefined)}
+            />
+          ) : (
+            <ImageIcon className="w-6 h-6 text-gray-400" />
+          )}
+        </div>
+        {/* 模式切换 Tab */}
+        <div className="flex gap-1 bg-gray-100 rounded-md p-1">
+          <button
+            type="button"
+            onClick={() => setMode("upload")}
+            className={`px-3 py-1 text-xs rounded transition-colors ${
+              mode === "upload"
+                ? "bg-white text-gray-900 shadow-sm font-medium"
+                : "text-gray-500 hover:text-gray-700"
+            }`}
+          >
+            上传图片
+          </button>
+          <button
+            type="button"
+            onClick={() => setMode("url")}
+            className={`px-3 py-1 text-xs rounded transition-colors ${
+              mode === "url"
+                ? "bg-white text-gray-900 shadow-sm font-medium"
+                : "text-gray-500 hover:text-gray-700"
+            }`}
+          >
+            填写 URL
+          </button>
+        </div>
+      </div>
+
+      {/* 上传模式 */}
+      {mode === "upload" && (
+        <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploading}
+          >
+            {uploading ? "上传中..." : preview ? "更换图片" : "选择图片"}
+          </Button>
+          <p className="text-xs text-gray-500">支持 JPG、PNG，建议正方形，最大 10MB</p>
+        </div>
+      )}
+
+      {/* URL 模式 */}
+      {mode === "url" && (
+        <div className="flex items-center gap-2">
+          <Input
+            value={urlInput}
+            onChange={(e) => setUrlInput(e.target.value)}
+            placeholder="https://example.com/logo.png"
+            className="text-sm h-8"
+            onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), handleUrlConfirm())}
+          />
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={handleUrlConfirm}
+            disabled={!urlInput.trim()}
+          >
+            确认
+          </Button>
+        </div>
+      )}
+
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/jpeg,image/png,image/gif,image/webp"
+        className="hidden"
+        onChange={handleFileChange}
+      />
     </div>
   );
 }
@@ -549,6 +693,7 @@ function CreateClubForm({
     name: "",
     description: "",
     category: "学术科技",
+    logo: undefined,
   });
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -558,6 +703,15 @@ function CreateClubForm({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
+      <div>
+        <Label>社团 Logo</Label>
+        <div className="mt-1">
+          <LogoUploader
+            value={formData.logo}
+            onChange={(url) => setFormData((prev) => ({ ...prev, logo: url }))}
+          />
+        </div>
+      </div>
       <div>
         <Label htmlFor="create-club-name">社团名称</Label>
         <Input
@@ -625,6 +779,7 @@ function EditClubForm({
     name: club.name,
     description: club.description,
     category: club.category,
+    logo: club.logo,
     isActive: club.isActive,
   });
 
@@ -635,6 +790,15 @@ function EditClubForm({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
+      <div>
+        <Label>社团 Logo</Label>
+        <div className="mt-1">
+          <LogoUploader
+            value={formData.logo}
+            onChange={(url) => setFormData((prev) => ({ ...prev, logo: url }))}
+          />
+        </div>
+      </div>
       <div>
         <Label htmlFor="edit-club-name">社团名称</Label>
         <Input
@@ -708,7 +872,7 @@ function EditClubForm({
 }
 
 // 社团成员管理组件
-function ClubMembersManagement({ clubId }: { clubId: string }) {
+const ClubMembersManagement = memo(function ClubMembersManagement({ clubId }: { clubId: string }) {
   const [membersParams, setMembersParams] = useState({
     role: "all",
     search: "",
@@ -736,7 +900,7 @@ function ClubMembersManagement({ clubId }: { clubId: string }) {
             : (membersParams.role as any),
         search: membersParams.search || undefined,
       }),
-    enabled: true,
+    enabled: !!clubId,
   });
 
   // 添加成员
@@ -751,11 +915,26 @@ function ClubMembersManagement({ clubId }: { clubId: string }) {
     onError: (error: any) => {
       toast({
         title: "错误",
-        description: error?.response?.data?.message || "添加成员失败",
+        description: error?.message || "添加成员失败",
         variant: "destructive",
       });
     },
   });
+
+  // 用 ref 持有 mutate 函数，避免内联箭头函数导致 AddMemberForm 重渲染
+  const addMemberMutateRef = useRef(addMemberMutation.mutate);
+  addMemberMutateRef.current = addMemberMutation.mutate;
+
+  const handleAddMemberSubmit = useCallback(
+    (data: { userId: string; role: "admin" | "candidate" }) =>
+      addMemberMutateRef.current(data),
+    [],
+  );
+
+  const handleAddMemberCancel = useCallback(
+    () => setIsAddMemberDialogOpen(false),
+    [],
+  );
 
   // 更新成员角色
   const updateRoleMutation = useMutation({
@@ -775,7 +954,7 @@ function ClubMembersManagement({ clubId }: { clubId: string }) {
     onError: (error: any) => {
       toast({
         title: "错误",
-        description: error?.response?.data?.message || "更新成员角色失败",
+        description: error?.message || "更新成员角色失败",
         variant: "destructive",
       });
     },
@@ -793,7 +972,7 @@ function ClubMembersManagement({ clubId }: { clubId: string }) {
     onError: (error: any) => {
       toast({
         title: "错误",
-        description: error?.response?.data?.message || "移除成员失败",
+        description: error?.message || "移除成员失败",
         variant: "destructive",
       });
     },
@@ -987,8 +1166,8 @@ function ClubMembersManagement({ clubId }: { clubId: string }) {
           </DialogHeader>
           <AddMemberForm
             clubId={clubId}
-            onSubmit={(data) => addMemberMutation.mutate(data)}
-            onCancel={() => setIsAddMemberDialogOpen(false)}
+            onSubmit={handleAddMemberSubmit}
+            onCancel={handleAddMemberCancel}
           />
         </DialogContent>
       </Dialog>
@@ -1053,10 +1232,10 @@ function ClubMembersManagement({ clubId }: { clubId: string }) {
       </Dialog>
     </div>
   );
-}
+});
 
-// 添加成员表单组件
-function AddMemberForm({
+// 添加成员表单组件（memo 防止父组件重渲染导致内部 state 重置）
+const AddMemberForm = memo(function AddMemberForm({
   clubId,
   onSubmit,
   onCancel,
@@ -1070,57 +1249,26 @@ function AddMemberForm({
     "candidate",
   );
   const [searchTerm, setSearchTerm] = useState("");
-  const [searchResults, setSearchResults] = useState<any[]>([]);
-  const [isSearching, setIsSearching] = useState(false);
+  // 用户停止输入 500ms 后才更新，触发 API 请求
+  const debouncedSearch = useDebounce(searchTerm, 500);
 
   const { toast } = useToast();
-  const queryClient = useQueryClient();
 
-  // 搜索用户
-  const searchUsersMutation = useMutation({
-    mutationFn: async (search: string) => {
-      // 这里应该调用搜索用户的API，暂时使用模拟数据
-      if (!search.trim()) return [];
-      const response = await usersApi.getUsers({
-        page: 1,
-        limit: 10,
-        search,
-      });
-      // 过滤掉已经是社团成员的用户
-      const existingMembersResponse = await clubsApi.getClubMembers(clubId, {
-        page: 1,
-        limit: 100,
-      });
-      const existingMemberIds = existingMembersResponse.data.map(
-        (m) => m.userId,
-      );
-      return response.users.filter(
-        (user) => !existingMemberIds.includes(user.id),
-      );
+  // 用 useQuery 做搜索：debouncedSearch 变化时自动触发，不需要手动 mutate
+  const { data: searchResults = [], isFetching: isSearching } = useQuery({
+    queryKey: ["user-search", debouncedSearch, clubId],
+    queryFn: async () => {
+      const [usersResp, membersResp] = await Promise.all([
+        usersApi.getUsers({ page: 1, limit: 10, search: debouncedSearch }),
+        clubsApi.getClubMembers(clubId, { page: 1, limit: 100 }),
+      ]);
+      const existingIds = new Set(membersResp.data.map((m) => m.userId));
+      return usersResp.users.filter((u) => !existingIds.has(u.id));
     },
-    onSuccess: (users) => {
-      setSearchResults(users);
-      setIsSearching(false);
-    },
-    onError: (error) => {
-      toast({
-        title: "错误",
-        description: "搜索用户失败",
-        variant: "destructive",
-      });
-      setIsSearching(false);
-    },
+    // 只有防抖后的词非空才发请求
+    enabled: debouncedSearch.trim().length > 0,
+    staleTime: 10_000,
   });
-
-  const handleSearch = (value: string) => {
-    setSearchTerm(value);
-    if (value.trim()) {
-      setIsSearching(true);
-      searchUsersMutation.mutate(value);
-    } else {
-      setSearchResults([]);
-    }
-  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -1135,8 +1283,6 @@ function AddMemberForm({
     onSubmit({ userId: selectedUserId, role: selectedRole });
   };
 
-  const isSubmitting = searchUsersMutation.isPending;
-
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div>
@@ -1144,9 +1290,8 @@ function AddMemberForm({
         <Input
           id="search-users"
           value={searchTerm}
-          onChange={(e) => handleSearch(e.target.value)}
+          onChange={(e) => setSearchTerm(e.target.value)}
           placeholder="输入姓名或邮箱搜索用户..."
-          disabled={searchUsersMutation.isPending}
         />
         {isSearching && <p className="text-sm text-gray-500 mt-1">搜索中...</p>}
       </div>
@@ -1201,13 +1346,13 @@ function AddMemberForm({
         <Button variant="outline" type="button" onClick={onCancel}>
           取消
         </Button>
-        <Button type="submit" disabled={!selectedUserId || isSubmitting}>
-          {isSubmitting ? "添加中..." : "添加到社团"}
+        <Button type="submit" disabled={!selectedUserId}>
+          添加到社团
         </Button>
       </DialogFooter>
     </form>
   );
-}
+});
 
 // 编辑角色表单组件
 function EditRoleForm({
@@ -1277,7 +1422,7 @@ function getCategoryLabel(category: string): string {
 
 export default function ClubManagementPage() {
   return (
-    <ProtectedRoute permission="user_view">
+    <ProtectedRoute permission="club_read">
       <ClubManagementPageContent
         user={{
           id: "admin-1",

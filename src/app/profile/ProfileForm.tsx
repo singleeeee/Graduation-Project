@@ -46,6 +46,8 @@ import {
   FileText,
   CheckCircle2,
   AlertCircle,
+  Pencil,
+  X,
 } from "lucide-react";
 
 // 解析字段的选项（可能是 JSON 字符串或对象数组）
@@ -540,6 +542,8 @@ function ProfileFieldsForm() {
     useProfileFieldsConfig();
   const updateProfileFields = useUpdateProfileFields();
 
+  // 默认查看态，点击"编辑"才进入编辑态
+  const [isEditing, setIsEditing] = useState(false);
   const [formValues, setFormValues] = useState<ProfileFieldFormData>({});
   // file 类型字段上传后的 fileId 映射 { fieldName -> fileId | null }
   const [fileIdMap, setFileIdMap] = useState<Record<string, string | null>>({});
@@ -607,7 +611,8 @@ function ProfileFieldsForm() {
       });
 
       const response = await updateProfileFields.mutateAsync({ profileFields });
-      // 成功后清空 fileIdMap（后端已绑定，下次通过 fieldsConfig 的 fileInfo 展示）
+      // 成功后退出编辑态，清空 fileIdMap
+      setIsEditing(false);
       setFileIdMap({});
       // 手动更新普通字段的表单值
       const newFormValues: ProfileFieldFormData = {};
@@ -621,6 +626,23 @@ function ProfileFieldsForm() {
     } catch (error) {
       // Error is handled in the mutation
     }
+  };
+
+  // 取消编辑：恢复原始值并退出编辑态
+  const handleCancel = () => {
+    // 重新从 profile 初始化表单值
+    const resetValues: ProfileFieldFormData = {};
+    fieldsConfig.fields.forEach((field) => {
+      if (field.fieldType === "file") return;
+      resetValues[field.fieldName] =
+        (profile?.profileFields?.[field.fieldName] as string) ??
+        (profile as any)?.[field.fieldName] ??
+        field.currentValue ??
+        "";
+    });
+    setFormValues(resetValues);
+    setFileIdMap({});
+    setIsEditing(false);
   };
 
   if (profileLoading || configLoading) {
@@ -674,40 +696,123 @@ function ProfileFieldsForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {fieldsToDisplay.map((field) => (
-          <DynamicFormField
-            key={field.fieldName}
-            field={field}
-            value={formValues[field.fieldName] || ""}
-            onChange={(value) => handleFieldChange(field.fieldName, value)}
-            onFileIdChange={
-              field.fieldType === "file"
-                ? (fileId) => handleFileIdChange(field.fieldName, fileId)
-                : undefined
-            }
-          />
-        ))}
+    <div className="space-y-6">
+      {/* 顶部操作栏 */}
+      <div className="flex justify-end">
+        {!isEditing ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setIsEditing(true)}
+          >
+            <Pencil className="h-4 w-4 mr-1.5" />
+            编辑档案
+          </Button>
+        ) : (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={handleCancel}
+          >
+            <X className="h-4 w-4 mr-1.5" />
+            取消
+          </Button>
+        )}
       </div>
 
-      <div className="flex justify-end">
-        <Button
-          type="submit"
-          disabled={updateProfileFields.isPending}
-          className="min-w-[120px]"
-        >
-          {updateProfileFields.isPending ? (
-            <>
-              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-              保存中...
-            </>
-          ) : (
-            "保存档案字段"
-          )}
-        </Button>
-      </div>
-    </form>
+      {/* 查看态：展示字段值 */}
+      {!isEditing ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
+          {fieldsToDisplay.map((field) => {
+            const displayValue = formValues[field.fieldName] || field.currentValue || "";
+            return (
+              <div key={field.fieldName} className="space-y-1">
+                <p className="text-sm font-medium text-gray-500">
+                  {field.fieldLabel}
+                  {field.isRequired && (
+                    <span className="text-red-400 ml-1">*</span>
+                  )}
+                </p>
+                {field.fieldType === "file" ? (
+                  field.fileInfo ? (
+                    <div className="flex items-center gap-2 text-sm text-blue-600">
+                      <FileText className="h-4 w-4 flex-shrink-0" />
+                      <span>已上传文件</span>
+                      {field.fileInfo.viewUrl && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 px-2 text-xs"
+                          onClick={() => window.open(field.fileInfo!.viewUrl, "_blank")}
+                        >
+                          <Eye className="h-3 w-3 mr-1" />预览
+                        </Button>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-gray-400">未上传</p>
+                  )
+                ) : displayValue ? (
+                  <p className="text-sm text-gray-900 py-1.5 px-3 bg-gray-50 rounded-md border border-gray-100">
+                    {displayValue}
+                  </p>
+                ) : (
+                  <p className="text-sm text-gray-400 py-1.5 px-3 bg-gray-50 rounded-md border border-gray-100 italic">
+                    未填写
+                  </p>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        /* 编辑态：可编辑表单 */
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {fieldsToDisplay.map((field) => (
+              <DynamicFormField
+                key={field.fieldName}
+                field={field}
+                value={formValues[field.fieldName] || ""}
+                onChange={(value) => handleFieldChange(field.fieldName, value)}
+                onFileIdChange={
+                  field.fieldType === "file"
+                    ? (fileId) => handleFileIdChange(field.fieldName, fileId)
+                    : undefined
+                }
+              />
+            ))}
+          </div>
+
+          <div className="flex justify-end gap-3">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleCancel}
+            >
+              取消
+            </Button>
+            <Button
+              type="submit"
+              disabled={updateProfileFields.isPending}
+              className="min-w-[120px]"
+            >
+              {updateProfileFields.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  保存中...
+                </>
+              ) : (
+                "保存档案字段"
+              )}
+            </Button>
+          </div>
+        </form>
+      )}
+    </div>
   );
 }
 

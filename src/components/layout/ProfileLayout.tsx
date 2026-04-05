@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { useRouter } from 'next/navigation'
 import { useAppStore } from '@/store'
 import { logout } from '@/lib/auth'
+import { usePermissions } from '@/hooks/use-permissions'
 
 interface User {
   id: string | null
@@ -15,7 +16,6 @@ interface User {
     id: string
     name: string
     code: string
-    level: number
     permissions: string[]
   } | null
   permissions?: string[]
@@ -28,6 +28,8 @@ interface ProfileLayoutProps {
 
 export function ProfileLayout({ user, children }: ProfileLayoutProps) {
   const router = useRouter()
+  const { hasPermission } = usePermissions()
+  const isAdmin = hasPermission('user_read')
 
   const handleLogout = async () => {
     try {
@@ -40,8 +42,8 @@ export function ProfileLayout({ user, children }: ProfileLayoutProps) {
   }
 
   const handleBackToDashboard = () => {
-    // 根据用户角色返回到对应的主页仪表盘
-    const dashboardPath = user.role === 'admin' ? '/admin' : '/'
+    // 根据用户权限返回对应主页
+    const dashboardPath = isAdmin ? '/' : '/'
     router.push(dashboardPath)
   }
 
@@ -60,11 +62,11 @@ export function ProfileLayout({ user, children }: ProfileLayoutProps) {
             </div>
             <div className="flex items-center space-x-4">
               <span className="text-sm text-gray-500">
-                欢迎，{user.name || (user.role === 'admin' ? '管理员' : '用户')}
+                欢迎，{user.name || (isAdmin ? '管理员' : '用户')}
               </span>
-              <div className={`w-8 h-8 ${user.role === 'admin' ? 'bg-blue-600' : 'bg-green-600'} rounded-full flex items-center justify-center`}>
+              <div className={`w-8 h-8 ${isAdmin ? 'bg-blue-600' : 'bg-green-600'} rounded-full flex items-center justify-center`}>
                 <span className="text-white text-sm font-medium">
-                  {user.name ? user.name.charAt(0).toUpperCase() : (user.role === 'admin' ? 'A' : 'U')}
+                  {user.name ? user.name.charAt(0).toUpperCase() : (isAdmin ? 'A' : 'U')}
                 </span>
               </div>
               <div className="flex space-x-2">

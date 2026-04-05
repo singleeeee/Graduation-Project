@@ -4,7 +4,6 @@ export interface UserRole {
   name: string
   code: string
   description?: string
-  level: number
   permissions?: string[]
 }
 
@@ -20,6 +19,7 @@ export interface UserProfile {
   emailVerified: boolean
   avatar?: string
   role: UserRole | string // 后端可能返回对象或字符串角色
+  permissions?: string[] | Array<{ code: string; [key: string]: any }> // 后端可能返回权限列表
   clubId?: string
   // 常用动态字段
   studentId?: string
@@ -118,7 +118,6 @@ export interface UserListParams {
   page?: number
   limit?: number
   role?: string
-  roleLevel?: number
   status?: UserStatus
   clubId?: string
   search?: string

@@ -13,6 +13,7 @@ import {
   ClipboardList,
   UserCircle,
   Settings,
+  Mail,
   type LucideIcon,
 } from "lucide-react";
 
@@ -43,56 +44,31 @@ export function usePermissions() {
     retry: 1,
   });
 
-  // 从profile中提取权限代码数组（兼容对象数组和字符串数组两种格式）
+  // 从 store 或 profile 中提取权限 code 数组（字符串数组格式）
   const normalizePerms = (arr: any[]): string[] =>
-    arr.map((p) => (typeof p === 'string' ? p : p?.code ?? '')).filter(Boolean)
+    arr.map((p) => (typeof p === 'string' ? p : p?.code ?? '')).filter(Boolean);
 
+  // 优先使用 userProfile（最新），其次 store 里的 permissions
   const userPermissions: string[] = userProfile?.permissions
     ? normalizePerms(userProfile.permissions)
     : user?.permissions
     ? normalizePerms(user.permissions as any[])
     : [];
 
-  // 具有全部权限的角色（超级管理员）
-  const SUPER_ADMIN_ROLES = ["super_admin", "system_admin"];
-  const isAdminRole = SUPER_ADMIN_ROLES.includes(user?.roleCode ?? "");
+  // 用 Set 提升查找性能
+  const permissionSet = new Set(userPermissions);
 
-  // 检查用户是否具有指定权限
-  const hasPermission = (permissionCode: string): boolean => {
-    if (isAdminRole) return true;
-    return userPermissions.includes(permissionCode);
-  };
+  // 检查用户是否具有指定权限（直接查 permissions 列表，不做角色特判）
+  const hasPermission = (permissionCode: string): boolean =>
+    permissionSet.has(permissionCode);
 
   // 检查用户是否具有任一权限
-  const hasAnyPermission = (permissionCodes: string[]): boolean => {
-    if (isAdminRole) return true;
-    return permissionCodes.some((code) => userPermissions.includes(code));
-  };
+  const hasAnyPermission = (permissionCodes: string[]): boolean =>
+    permissionCodes.some((code) => permissionSet.has(code));
 
   // 检查用户是否具有所有权限
-  const hasAllPermissions = (permissionCodes: string[]): boolean => {
-    if (isAdminRole) return true;
-
-    return permissionCodes.every((code) => userPermissions.includes(code));
-  };
-
-  // 检查用户角色级别是否足够（简化实现）
-  const hasRoleLevel = (requiredLevel?: number): boolean => {
-    // 如果没有提供级别要求，默认为true
-    if (requiredLevel === undefined) return true;
-
-    // 基于角色代码的简化级别判断
-    const roleLevels: Record<string, number> = {
-      super_admin: 100,
-      system_admin: 90,
-      club_admin: 80,
-      interviewer: 70,
-      candidate: 10,
-    };
-
-    const userLevel = roleLevels[user?.roleCode || ""] || 0;
-    return userLevel >= requiredLevel;
-  };
+  const hasAllPermissions = (permissionCodes: string[]): boolean =>
+    permissionCodes.every((code) => permissionSet.has(code));
 
   // 检查用户是否具有指定角色
   const hasRole = (roleCode: string): boolean => {
@@ -115,7 +91,6 @@ export function usePermissions() {
     hasAllPermissions,
 
     // 角色检查方法
-    hasRoleLevel,
     hasRole,
     hasAnyRole,
 
@@ -133,7 +108,6 @@ export function useRoles(filters?: {
   page?: number;
   limit?: number;
   search?: string;
-  level?: number;
   isActive?: boolean;
 }) {
   const { data, isLoading, error, refetch } = useQuery({
@@ -277,6 +251,8 @@ export interface MenuItem {
   current: boolean;
   permission?: string;
   permissions?: string[];
+  /** 若用户拥有此权限，则隐藏该菜单项（用于区分候选人和管理员共享同一权限的场景） */
+  excludePermission?: string;
 }
 
 /**
@@ -299,22 +275,21 @@ export function useMenuItems(currentPath: string = "/"): MenuItem[] {
       icon: ShieldCheck,
       href: "/admin/roles",
       current: currentPath.startsWith("/admin/roles"),
-      // 超级管理员才有角色管理，使用一个不存在的权限让普通管理员看不到；这里空管理员通过 isAdminRole 自动通过
-      permission: "role_manage",
+      permissions: ["role_read", "role_update"],
     },
     {
       title: "字段管理",
       icon: SlidersHorizontal,
       href: "/admin/registration-fields",
       current: currentPath.startsWith("/admin/registration-fields"),
-      permission: "registration_field_manage",
+      permission: "registrationfield_manage",
     },
     {
       title: "用户管理",
       icon: UserCog,
       href: "/admin/users",
       current: currentPath.startsWith("/admin/users"),
-      permission: "user_manage",
+      permission: "user_read",
     },
     {
       title: "社团管理",
@@ -328,21 +303,26 @@ export function useMenuItems(currentPath: string = "/"): MenuItem[] {
       icon: Megaphone,
       href: "/admin/recruitment",
       current: currentPath.startsWith("/admin/recruitment"),
-      permissions: ["recruitment_create", "recruitment_update", "recruitment_read"],
+      // 仅管理员角色可见，候选人虽有 recruitment_read 但不应看到管理菜单
+      permissions: ["recruitment_create", "recruitment_update"],
     },
     {
       title: "招新信息",
       icon: Users,
       href: "/recruitment",
       current: currentPath.startsWith("/recruitment"),
+      // 候选人专属：有 recruitment_read 但没有 recruitment_update（管理员有 update，不需要这个入口）
       permission: "recruitment_read",
+      excludePermission: "recruitment_update",
     },
     {
       title: "我的申请",
       icon: FileText,
       href: "/applications",
       current: currentPath.startsWith("/applications"),
+      // 候选人专属：有 application_read 但没有 application_update
       permission: "application_read",
+      excludePermission: "application_update",
     },
     {
       title: "简历筛选",
@@ -350,6 +330,13 @@ export function useMenuItems(currentPath: string = "/"): MenuItem[] {
       href: "/admin/screening",
       current: currentPath.startsWith("/admin/screening"),
       permissions: ["application_read", "application_update"],
+    },
+    {
+      title: "邮件系统",
+      icon: Mail,
+      href: "/admin/email",
+      current: currentPath.startsWith("/admin/email"),
+      permission: "user_read",
     },
     {
       title: "个人信息",
@@ -362,29 +349,18 @@ export function useMenuItems(currentPath: string = "/"): MenuItem[] {
       icon: Settings,
       href: "/settings",
       current: currentPath.startsWith("/settings"),
-      permission: "system_settings",
+      permission: "systemsetting_read",
     },
   ];
 
-  // 优先用 roleCode，其次尝试解析字符串形式的 role
-  const roleCode =
-    user?.roleCode ||
-    (typeof user?.role === "string" ? user.role : null) ||
-    (typeof user?.role === "object" && user.role !== null
-      ? (user.role as { code?: string }).code
-      : null) ||
-    "candidate";
-
-  // 候选人角色：只显示候选人允许的菜单
-  const CANDIDATE_MENUS = ["仪表盘", "个人信息", "我的申请", "招新信息"];
-  if (roleCode === "candidate") {
-    return allMenuItems.filter((item) => CANDIDATE_MENUS.includes(item.title));
-  }
-
-  // 管理员角色：根据权限过滤菜单
+  // 统一基于 permissions 过滤菜单，不再对角色做特判
   return allMenuItems.filter((item) => {
+    // excludePermission：若用户拥有该权限则隐藏（优先判断）
+    if (item.excludePermission && hasPermission(item.excludePermission)) {
+      return false;
+    }
     if (!item.permission && !item.permissions) {
-      return true; // 没有权限要求的菜单项总是显示
+      return true; // 无权限要求，所有登录用户可见
     }
     if (item.permission) {
       return hasPermission(item.permission);

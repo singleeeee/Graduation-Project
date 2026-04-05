@@ -8,10 +8,12 @@ import { AdminDashboard } from "@/components/dashboard/AdminDashboard";
 import { CandidateDashboard } from "@/components/dashboard/CandidateDashboard";
 import WelcomePage from "@/components/pages/WelcomePage";
 import { Loader2 } from "lucide-react";
+import { usePermissions } from "@/hooks/use-permissions";
 
 export default function Home() {
   const router = useRouter();
   const { user } = useAppStore();
+  const { hasPermission } = usePermissions();
   // 用响应式 state 追踪认证状态，避免静态 if 判断
   const [authStatus, setAuthStatus] = useState<"loading" | "authenticated" | "unauthenticated">("loading");
 
@@ -48,18 +50,9 @@ export default function Home() {
     return <WelcomePage />;
   }
 
-  // 已认证，根据角色展示对应页面
-  const roleCode =
-    user.roleCode ||
-    (typeof user.role === "object" && user.role?.code) ||
-    (typeof user.role === "string" && user.role) ||
-    null;
-
-  const isAdmin =
-    roleCode === "super_admin" ||
-    roleCode === "admin" ||
-    roleCode === "system_admin" ||
-    roleCode === "club_admin";
+  // 已认证，根据权限展示对应页面
+  // 拥有 recruitment_read 权限的用户进入管理员仪表盘
+  const isAdmin = hasPermission("recruitment_read") || hasPermission("user_read");
 
   if (isAdmin) {
     return <AdminDashboard user={user} logout={handleLogout} />;
