@@ -4,6 +4,7 @@ import { useState, useCallback, useRef, memo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAppStore } from "@/store";
 import { useToast } from "@/hooks/use-toast";
+import { usePermissions } from "@/hooks/use-permissions";
 import {
   Search,
   Plus,
@@ -13,6 +14,7 @@ import {
   Settings,
   ImageIcon,
   Building2,
+  Megaphone,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -49,15 +51,7 @@ import {
   DialogTrigger,
   DialogClose,
 } from "@/components/ui/dialog";
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormMessage,
-} from "@/components/ui/form";
 import { Badge } from "@/components/ui/badge";
-import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { clubsApi, usersApi, filesApi } from "@/lib/api";
 import { useDebounce } from "@/hooks/use-debounce";
 import type {
@@ -73,20 +67,17 @@ interface ClubFilters {
   isActive: string;
 }
 
-function ClubManagementPageContent({
-  user,
-  logout,
-}: {
-  user: any;
-  logout: () => void;
-}) {
+export default function ClubsPage() {
+  const { hasPermission } = usePermissions();
+  const canManage = hasPermission("club_manage");
+
   const [filters, setFilters] = useState<ClubFilters>({
     search: "",
     category: "all",
     isActive: "active",
   });
   const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
+  const [pageSize] = useState(10);
   const [selectedClub, setSelectedClub] = useState<Club | null>(null);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
@@ -114,13 +105,10 @@ function ClubManagementPageContent({
     error,
   } = useQuery({
     queryKey: ["clubs", queryParams],
-    queryFn: () => {
-      return clubsApi.getClubs(queryParams);
-    },
-    enabled: true,
-    staleTime: 0, // 禁用缓存，每次切换都重新获取数据
-    refetchOnWindowFocus: true, // 窗口获得焦点时重新获取
-    refetchOnMount: true, // 组件挂载时重新获取
+    queryFn: () => clubsApi.getClubs(queryParams),
+    staleTime: 0,
+    refetchOnWindowFocus: true,
+    refetchOnMount: true,
   });
 
   // 创建社团
@@ -179,7 +167,7 @@ function ClubManagementPageContent({
 
   const handleSearch = (value: string) => {
     setFilters((prev) => ({ ...prev, search: value }));
-    setCurrentPage(1); // 重置页码
+    setCurrentPage(1);
   };
 
   const handleCategoryChange = (value: string) => {
@@ -221,27 +209,31 @@ function ClubManagementPageContent({
       <div className="flex justify-between items-center mb-6">
         <div>
           <h1 className="text-2xl font-bold">社团管理</h1>
-          <p className="text-gray-500 mt-2">管理所有社团信息、成员和权限</p>
+          <p className="text-gray-500 mt-2">
+            {canManage ? "管理所有社团信息、成员和权限" : "查看社团信息"}
+          </p>
         </div>
-        <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="w-4 h-4 mr-2" />
-              创建社团
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[500px]">
-            <DialogHeader>
-              <DialogTitle>创建社团</DialogTitle>
-              <DialogDescription>
-                创建一个新的社团，设置基本信息和分类
-              </DialogDescription>
-            </DialogHeader>
-            <CreateClubForm
-              onSubmit={(data) => createClubMutation.mutate(data)}
-            />
-          </DialogContent>
-        </Dialog>
+        {canManage && (
+          <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+            <DialogTrigger asChild>
+              <Button>
+                <Plus className="w-4 h-4 mr-2" />
+                创建社团
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[500px]">
+              <DialogHeader>
+                <DialogTitle>创建社团</DialogTitle>
+                <DialogDescription>
+                  创建一个新的社团，设置基本信息和分类
+                </DialogDescription>
+              </DialogHeader>
+              <CreateClubForm
+                onSubmit={(data) => createClubMutation.mutate(data)}
+              />
+            </DialogContent>
+          </Dialog>
+        )}
       </div>
 
       {/* 统计卡片 */}
@@ -289,7 +281,10 @@ function ClubManagementPageContent({
               <div>
                 <p className="text-sm font-medium text-gray-500">总招新批次</p>
                 <p className="text-2xl font-bold">
-                  {clubs.reduce((sum, club) => sum + (club.recruitmentCount || 0), 0)}
+                  {clubs.reduce(
+                    (sum, club) => sum + (club.recruitmentCount || 0),
+                    0
+                  )}
                 </p>
               </div>
               <Settings className="w-8 h-8 text-purple-500" />
@@ -324,20 +319,27 @@ function ClubManagementPageContent({
                 <SelectItem value="all">所有分类</SelectItem>
                 <SelectItem value="学术科技">学术科技</SelectItem>
                 <SelectItem value="体育竞技">体育竞技</SelectItem>
+                <SelectItem value="文化艺术">文化艺术</SelectItem>
+                <SelectItem value="创新创业">创新创业</SelectItem>
                 <SelectItem value="文学艺术">文学艺术</SelectItem>
                 <SelectItem value="艺术文化">艺术文化</SelectItem>
               </SelectContent>
             </Select>
-            <Select value={filters.isActive} onValueChange={handleStatusChange}>
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="状态" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">所有状态</SelectItem>
-                <SelectItem value="active">活跃</SelectItem>
-                <SelectItem value="inactive">非活跃</SelectItem>
-              </SelectContent>
-            </Select>
+            {canManage && (
+              <Select
+                value={filters.isActive}
+                onValueChange={handleStatusChange}
+              >
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder="状态" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">所有状态</SelectItem>
+                  <SelectItem value="active">活跃</SelectItem>
+                  <SelectItem value="inactive">非活跃</SelectItem>
+                </SelectContent>
+              </Select>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -355,22 +357,28 @@ function ClubManagementPageContent({
                 <TableHead>社团信息</TableHead>
                 <TableHead>分类</TableHead>
                 <TableHead>状态</TableHead>
-<TableHead>管理员数</TableHead>
-<TableHead>招新批次</TableHead>
+                <TableHead>管理员数</TableHead>
+                <TableHead>招新批次</TableHead>
                 <TableHead>创建时间</TableHead>
-                <TableHead>操作</TableHead>
+                {canManage && <TableHead>操作</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-10">
+                  <TableCell
+                    colSpan={canManage ? 7 : 6}
+                    className="text-center py-10"
+                  >
                     加载中...
                   </TableCell>
                 </TableRow>
               ) : clubs.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-10">
+                  <TableCell
+                    colSpan={canManage ? 7 : 6}
+                    className="text-center py-10"
+                  >
                     暂无社团数据
                   </TableCell>
                 </TableRow>
@@ -404,41 +412,45 @@ function ClubManagementPageContent({
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      <Badge variant={club.isActive ? "default" : "secondary"}>
+                      <Badge
+                        variant={club.isActive ? "default" : "secondary"}
+                      >
                         {club.isActive ? "活跃" : "非活跃"}
                       </Badge>
                     </TableCell>
-<TableCell>{club.adminCount ?? 0}</TableCell>
-<TableCell>{club.recruitmentCount ?? 0}</TableCell>
+                    <TableCell>{club.adminCount ?? 0}</TableCell>
+                    <TableCell>{club.recruitmentCount ?? 0}</TableCell>
                     <TableCell>
                       {new Date(club.createdAt).toLocaleDateString()}
                     </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleManageMembers(club)}
-                        >
-                          <Users className="w-4 h-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleEdit(club)}
-                        >
-                          <Edit className="w-4 h-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleDelete(club)}
-                          className="text-red-500 hover:text-red-600"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    </TableCell>
+                    {canManage && (
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleManageMembers(club)}
+                          >
+                            <Users className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleEdit(club)}
+                          >
+                            <Edit className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleDelete(club)}
+                            className="text-red-500 hover:text-red-600"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    )}
                   </TableRow>
                 ))
               )}
@@ -484,64 +496,76 @@ function ClubManagementPageContent({
       </Card>
 
       {/* 编辑社团对话框 */}
-      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent className="sm:max-w-[500px]">
-          <DialogHeader>
-            <DialogTitle>编辑社团</DialogTitle>
-            <DialogDescription>修改社团的基本信息</DialogDescription>
-          </DialogHeader>
-          {selectedClub && (
-            <EditClubForm
-              club={selectedClub}
-              onSubmit={(data) =>
-                updateClubMutation.mutate({ id: selectedClub.id, data })
-              }
-            />
-          )}
-        </DialogContent>
-      </Dialog>
+      {canManage && (
+        <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+          <DialogContent className="sm:max-w-[500px]">
+            <DialogHeader>
+              <DialogTitle>编辑社团</DialogTitle>
+              <DialogDescription>修改社团的基本信息</DialogDescription>
+            </DialogHeader>
+            {selectedClub && (
+              <EditClubForm
+                key={selectedClub.id}
+                club={selectedClub}
+                onSubmit={(data) =>
+                  updateClubMutation.mutate({ id: selectedClub.id, data })
+                }
+              />
+            )}
+          </DialogContent>
+        </Dialog>
+      )}
 
       {/* 删除确认对话框 */}
-      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-        <DialogContent className="sm:max-w-[400px]">
-          <DialogHeader>
-            <DialogTitle>确认删除</DialogTitle>
-            <DialogDescription>
-              确定要删除社团 &ldquo;{selectedClub?.name}&rdquo;
-              吗？此操作将软删除社团信息。
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <DialogClose asChild>
-              <Button variant="outline">取消</Button>
-            </DialogClose>
-            <Button
-              variant="destructive"
-              onClick={handleDeleteConfirm}
-              disabled={deleteClubMutation.isPending}
-            >
-              {deleteClubMutation.isPending ? "删除中..." : "确认删除"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {canManage && (
+        <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+          <DialogContent className="sm:max-w-[400px]">
+            <DialogHeader>
+              <DialogTitle>确认删除</DialogTitle>
+              <DialogDescription>
+                确定要删除社团 &ldquo;{selectedClub?.name}&rdquo;
+                吗？此操作将软删除社团信息。
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <DialogClose asChild>
+                <Button variant="outline">取消</Button>
+              </DialogClose>
+              <Button
+                variant="destructive"
+                onClick={handleDeleteConfirm}
+                disabled={deleteClubMutation.isPending}
+              >
+                {deleteClubMutation.isPending ? "删除中..." : "确认删除"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
 
       {/* 成员管理对话框 */}
-      <Dialog open={isMembersDialogOpen} onOpenChange={setIsMembersDialogOpen}>
-        <DialogContent className="sm:max-w-[700px]">
-          <DialogHeader>
-            <DialogTitle>成员管理 - {selectedClub?.name}</DialogTitle>
-            <DialogDescription>管理社团成员和权限</DialogDescription>
-          </DialogHeader>
-          {/* key 绑定 clubId：切换社团时重置组件，同一社团内不重建（避免输入 focus 丢失） */}
-          <ClubMembersManagement key={selectedClub?.id ?? "none"} clubId={selectedClub?.id ?? ""} />
-        </DialogContent>
-      </Dialog>
+      {canManage && (
+        <Dialog
+          open={isMembersDialogOpen}
+          onOpenChange={setIsMembersDialogOpen}
+        >
+          <DialogContent className="sm:max-w-[700px]">
+            <DialogHeader>
+              <DialogTitle>成员管理 - {selectedClub?.name}</DialogTitle>
+              <DialogDescription>管理社团成员和权限</DialogDescription>
+            </DialogHeader>
+            <ClubMembersManagement
+              key={selectedClub?.id ?? "none"}
+              clubId={selectedClub?.id ?? ""}
+            />
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }
 
-// 社团 Logo 上传控件（复用于创建/编辑）
+// 社团 Logo 上传控件
 function LogoUploader({
   value,
   onChange,
@@ -560,7 +584,6 @@ function LogoUploader({
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // 本地预览
     const objectUrl = URL.createObjectURL(file);
     setPreview(objectUrl);
 
@@ -571,7 +594,7 @@ function LogoUploader({
       onChange(viewUrl);
       toast({ title: "上传成功", description: "社团 Logo 已上传" });
     } catch (err: any) {
-      setPreview(value); // 回滚预览
+      setPreview(value);
       toast({
         title: "上传失败",
         description: err?.response?.data?.message || "图片上传失败，请重试",
@@ -593,7 +616,6 @@ function LogoUploader({
 
   return (
     <div className="space-y-3">
-      {/* 预览区 */}
       <div className="flex items-center gap-4">
         <div className="w-16 h-16 rounded-lg border-2 border-dashed border-gray-300 flex items-center justify-center bg-gray-50 overflow-hidden flex-shrink-0">
           {preview ? (
@@ -607,7 +629,6 @@ function LogoUploader({
             <ImageIcon className="w-6 h-6 text-gray-400" />
           )}
         </div>
-        {/* 模式切换 Tab */}
         <div className="flex gap-1 bg-gray-100 rounded-md p-1">
           <button
             type="button"
@@ -634,7 +655,6 @@ function LogoUploader({
         </div>
       </div>
 
-      {/* 上传模式 */}
       {mode === "upload" && (
         <div className="flex items-center gap-2">
           <Button
@@ -646,11 +666,12 @@ function LogoUploader({
           >
             {uploading ? "上传中..." : preview ? "更换图片" : "选择图片"}
           </Button>
-          <p className="text-xs text-gray-500">支持 JPG、PNG，建议正方形，最大 10MB</p>
+          <p className="text-xs text-gray-500">
+            支持 JPG、PNG，建议正方形，最大 10MB
+          </p>
         </div>
       )}
 
-      {/* URL 模式 */}
       {mode === "url" && (
         <div className="flex items-center gap-2">
           <Input
@@ -658,7 +679,9 @@ function LogoUploader({
             onChange={(e) => setUrlInput(e.target.value)}
             placeholder="https://example.com/logo.png"
             className="text-sm h-8"
-            onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), handleUrlConfirm())}
+            onKeyDown={(e) =>
+              e.key === "Enter" && (e.preventDefault(), handleUrlConfirm())
+            }
           />
           <Button
             type="button"
@@ -683,7 +706,7 @@ function LogoUploader({
   );
 }
 
-// 创建社团表单组件
+// 创建社团表单
 function CreateClubForm({
   onSubmit,
 }: {
@@ -750,6 +773,8 @@ function CreateClubForm({
           <SelectContent>
             <SelectItem value="学术科技">学术科技</SelectItem>
             <SelectItem value="体育竞技">体育竞技</SelectItem>
+            <SelectItem value="文化艺术">文化艺术</SelectItem>
+            <SelectItem value="创新创业">创新创业</SelectItem>
             <SelectItem value="文学艺术">文学艺术</SelectItem>
             <SelectItem value="艺术文化">艺术文化</SelectItem>
           </SelectContent>
@@ -767,7 +792,7 @@ function CreateClubForm({
   );
 }
 
-// 编辑社团表单组件
+// 编辑社团表单
 function EditClubForm({
   club,
   onSubmit,
@@ -837,6 +862,8 @@ function EditClubForm({
           <SelectContent>
             <SelectItem value="学术科技">学术科技</SelectItem>
             <SelectItem value="体育竞技">体育竞技</SelectItem>
+            <SelectItem value="文化艺术">文化艺术</SelectItem>
+            <SelectItem value="创新创业">创新创业</SelectItem>
             <SelectItem value="文学艺术">文学艺术</SelectItem>
             <SelectItem value="艺术文化">艺术文化</SelectItem>
           </SelectContent>
@@ -872,7 +899,11 @@ function EditClubForm({
 }
 
 // 社团成员管理组件
-const ClubMembersManagement = memo(function ClubMembersManagement({ clubId }: { clubId: string }) {
+const ClubMembersManagement = memo(function ClubMembersManagement({
+  clubId,
+}: {
+  clubId: string;
+}) {
   const [membersParams, setMembersParams] = useState({
     role: "all",
     search: "",
@@ -887,7 +918,6 @@ const ClubMembersManagement = memo(function ClubMembersManagement({ clubId }: { 
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
-  // 获取社团成员列表
   const { data: membersData, isLoading } = useQuery({
     queryKey: ["club-members", clubId, membersParams, currentPage],
     queryFn: () =>
@@ -903,7 +933,6 @@ const ClubMembersManagement = memo(function ClubMembersManagement({ clubId }: { 
     enabled: !!clubId,
   });
 
-  // 添加成员
   const addMemberMutation = useMutation({
     mutationFn: (data: { userId: string; role: "admin" | "candidate" }) =>
       clubsApi.addMember(clubId, data),
@@ -921,22 +950,20 @@ const ClubMembersManagement = memo(function ClubMembersManagement({ clubId }: { 
     },
   });
 
-  // 用 ref 持有 mutate 函数，避免内联箭头函数导致 AddMemberForm 重渲染
   const addMemberMutateRef = useRef(addMemberMutation.mutate);
   addMemberMutateRef.current = addMemberMutation.mutate;
 
   const handleAddMemberSubmit = useCallback(
     (data: { userId: string; role: "admin" | "candidate" }) =>
       addMemberMutateRef.current(data),
-    [],
+    []
   );
 
   const handleAddMemberCancel = useCallback(
     () => setIsAddMemberDialogOpen(false),
-    [],
+    []
   );
 
-  // 更新成员角色
   const updateRoleMutation = useMutation({
     mutationFn: ({
       memberId,
@@ -960,7 +987,6 @@ const ClubMembersManagement = memo(function ClubMembersManagement({ clubId }: { 
     },
   });
 
-  // 移除成员
   const removeMemberMutation = useMutation({
     mutationFn: (memberId: string) => clubsApi.removeMember(clubId, memberId),
     onSuccess: () => {
@@ -1003,7 +1029,6 @@ const ClubMembersManagement = memo(function ClubMembersManagement({ clubId }: { 
 
   return (
     <div className="space-y-4">
-      {/* 操作栏 */}
       <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
         <div className="flex-1 flex gap-4">
           <div className="relative flex-1 max-w-xs">
@@ -1032,7 +1057,6 @@ const ClubMembersManagement = memo(function ClubMembersManagement({ clubId }: { 
         </Button>
       </div>
 
-      {/* 成员列表 */}
       <div className="border rounded-lg">
         <Table>
           <TableHeader>
@@ -1119,7 +1143,6 @@ const ClubMembersManagement = memo(function ClubMembersManagement({ clubId }: { 
           </TableBody>
         </Table>
 
-        {/* 分页 */}
         {totalPages > 1 && (
           <div className="flex items-center justify-between p-4 border-t">
             <div className="text-sm text-gray-500">
@@ -1234,7 +1257,7 @@ const ClubMembersManagement = memo(function ClubMembersManagement({ clubId }: { 
   );
 });
 
-// 添加成员表单组件（memo 防止父组件重渲染导致内部 state 重置）
+// 添加成员表单
 const AddMemberForm = memo(function AddMemberForm({
   clubId,
   onSubmit,
@@ -1246,15 +1269,13 @@ const AddMemberForm = memo(function AddMemberForm({
 }) {
   const [selectedUserId, setSelectedUserId] = useState<string>("");
   const [selectedRole, setSelectedRole] = useState<"admin" | "candidate">(
-    "candidate",
+    "candidate"
   );
   const [searchTerm, setSearchTerm] = useState("");
-  // 用户停止输入 500ms 后才更新，触发 API 请求
   const debouncedSearch = useDebounce(searchTerm, 500);
 
   const { toast } = useToast();
 
-  // 用 useQuery 做搜索：debouncedSearch 变化时自动触发，不需要手动 mutate
   const { data: searchResults = [], isFetching: isSearching } = useQuery({
     queryKey: ["user-search", debouncedSearch, clubId],
     queryFn: async () => {
@@ -1265,7 +1286,6 @@ const AddMemberForm = memo(function AddMemberForm({
       const existingIds = new Set(membersResp.data.map((m) => m.userId));
       return usersResp.users.filter((u) => !existingIds.has(u.id));
     },
-    // 只有防抖后的词非空才发请求
     enabled: debouncedSearch.trim().length > 0,
     staleTime: 10_000,
   });
@@ -1296,7 +1316,6 @@ const AddMemberForm = memo(function AddMemberForm({
         {isSearching && <p className="text-sm text-gray-500 mt-1">搜索中...</p>}
       </div>
 
-      {/* 搜索结果 */}
       {searchResults.length > 0 && (
         <div className="border rounded-lg max-h-40 overflow-y-auto">
           {searchResults.map((user) => (
@@ -1354,7 +1373,7 @@ const AddMemberForm = memo(function AddMemberForm({
   );
 });
 
-// 编辑角色表单组件
+// 编辑角色表单
 function EditRoleForm({
   currentRole,
   onSubmit,
@@ -1365,7 +1384,7 @@ function EditRoleForm({
   onCancel: () => void;
 }) {
   const [selectedRole, setSelectedRole] = useState<"admin" | "candidate">(
-    currentRole as any,
+    currentRole as any
   );
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -1408,6 +1427,8 @@ function getCategoryLabel(category: string): string {
   const categoryMap: { [key: string]: string } = {
     学术科技: "学术科技",
     体育竞技: "体育竞技",
+    文化艺术: "文化艺术",
+    创新创业: "创新创业",
     文学艺术: "文学艺术",
     艺术文化: "艺术文化",
     academic: "学术类",
@@ -1418,29 +1439,4 @@ function getCategoryLabel(category: string): string {
     other: "其他",
   };
   return categoryMap[category] || category;
-}
-
-export default function ClubManagementPage() {
-  return (
-    <ProtectedRoute permission="club_read">
-      <ClubManagementPageContent
-        user={{
-          id: "admin-1",
-          name: "超级管理员",
-          email: "admin@example.com",
-          role: "system_admin",
-        }}
-        logout={async () => {
-          try {
-            const { logout: logoutStore } = useAppStore.getState();
-            await logoutStore();
-            window.location.href = "/login";
-          } catch (error) {
-            console.error("退出登录失败:", error);
-            window.location.href = "/login";
-          }
-        }}
-      />
-    </ProtectedRoute>
-  );
 }

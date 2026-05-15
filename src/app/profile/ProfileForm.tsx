@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useForm, FormProvider, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useToast } from "@/hooks/use-toast";
@@ -38,6 +39,8 @@ import type {
   ProfileFieldFormData,
 } from "@/lib/utils/validations";
 import { filesApi } from "@/lib/api/files";
+import usersApi from "@/lib/api/users";
+import { useAppStore } from "@/store";
 import {
   Loader2,
   Upload,
@@ -350,13 +353,14 @@ function DynamicFormField({
 // 基本信息表单组件
 function BasicInfoForm() {
   const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const setUser = useAppStore((s) => s.setUser);
   const {
     data: profile,
     isLoading: profileLoading,
     refetch: refetchProfile,
   } = useProfile();
   const updateBasicInfo = useUpdateBasicInfo();
-  const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
 
   const formMethods = useForm<ProfileBasicInfoFormData>({
@@ -387,32 +391,49 @@ function BasicInfoForm() {
     }
   };
 
-  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const [selectedFileName, setSelectedFileName] = React.useState<string>("");
 
-    setIsUploading(true);
-    try {
-      // 获取表单中的当前值
-      const formValues = formMethods.getValues();
+  // 用原生 addEventListener 绑定 change 事件，避免 React 合成事件在 file input 上的兼容问题
+  useEffect(() => {
+    const input = fileInputRef.current;
+    if (!input) return;
 
-      // 创建FormData对象
-      const formData = new FormData();
-      formData.append("avatar", file);
-      formData.append("name", formValues.name || "");
+    const handleChange = async () => {
+      const file = input.files?.[0];
+      if (!file) return;
 
-      // 使用updateBasicInfo钩子上传头像
-      await updateBasicInfo.mutateAsync(formData as any);
-    } catch (error) {
-      toast({
-        title: "上传失败",
-        description: "头像上传时出现错误",
-        variant: "destructive",
-      });
-    } finally {
-      setIsUploading(false);
-    }
-  };
+      setSelectedFileName(file.name);
+      setIsUploading(true);
+      try {
+        const result = await usersApi.uploadAvatar(file);
+        queryClient.setQueryData(["profile"], (old: any) =>
+          old ? { ...old, avatar: result.url } : old
+        );
+        setUser({ avatar: result.url });
+        setSelectedFileName("✓ 上传成功");
+        toast({
+          title: "上传成功",
+          description: "头像已更新",
+          variant: "default",
+        });
+      } catch (error: any) {
+        setSelectedFileName("");
+        toast({
+          title: "上传失败",
+          description: error?.message || "头像上传时出现错误",
+          variant: "destructive",
+        });
+      } finally {
+        setIsUploading(false);
+        input.value = "";
+      }
+    };
+
+    input.addEventListener("change", handleChange);
+    return () => input.removeEventListener("change", handleChange);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   if (profileLoading) {
     return (
@@ -498,16 +519,28 @@ function BasicInfoForm() {
                 </div>
               </div>
               <div className="w-full">
-                <Input
+                {/* 隐藏的原生 file input，通过按钮触发 */}
+                <input
+                  ref={fileInputRef}
                   type="file"
                   accept="image/*"
-                  onChange={handleAvatarChange}
                   disabled={isUploading}
-                  className="w-full file:mr-2 file:py-1 file:px-3 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-primary file:text-primary-foreground hover:file:bg-primary/90"
+                  className="hidden"
                 />
-                {isUploading && (
-                  <p className="mt-1 text-sm text-gray-600">上传中...</p>
-                )}
+                <div className="flex items-center gap-3">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={isUploading}
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    {isUploading ? "上传中..." : "选择图片"}
+                  </Button>
+                  <span className={`text-sm ${selectedFileName === "✓ 上传成功" ? "text-green-600 font-medium" : "text-gray-500"}`}>
+                    {selectedFileName || "未选择文件"}
+                  </span>
+                </div>
               </div>
             </div>
           </div>

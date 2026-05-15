@@ -12,7 +12,6 @@ import {
   FileText,
   ClipboardList,
   UserCircle,
-  Settings,
   Mail,
   type LucideIcon,
 } from "lucide-react";
@@ -32,7 +31,7 @@ export function usePermissions() {
     isLoading,
     error,
   } = useQuery({
-    queryKey: ["userProfile"],
+    queryKey: ["userProfile", user?.id], // 包含 user.id，切换账号时自动失效缓存
     queryFn: async () => {
       const response = await usersApi.getProfile();
       return response;
@@ -54,6 +53,8 @@ export function usePermissions() {
     : user?.permissions
     ? normalizePerms(user.permissions as any[])
     : [];
+
+  console.log('[usePermissions] source:', userProfile ? 'userProfile' : 'store', '| permissions:', userPermissions, '| isLoading:', isLoading)
 
   // 用 Set 提升查找性能
   const permissionSet = new Set(userPermissions);
@@ -260,7 +261,7 @@ export interface MenuItem {
  * 根据用户权限动态生成菜单项
  */
 export function useMenuItems(currentPath: string = "/"): MenuItem[] {
-  const { hasPermission, hasAnyPermission } = usePermissions();
+  const { hasPermission, hasAnyPermission, isLoading } = usePermissions();
   const { user } = useAppStore();
 
   const allMenuItems: MenuItem[] = [
@@ -294,9 +295,9 @@ export function useMenuItems(currentPath: string = "/"): MenuItem[] {
     {
       title: "社团管理",
       icon: Building2,
-      href: "/admin/clubs",
-      current: currentPath.startsWith("/admin/clubs"),
-      permission: "club_manage",
+      href: "/clubs",
+      current: currentPath.startsWith("/clubs"),
+      permissions: ["club_read", "club_manage"],
     },
     {
       title: "招新管理",
@@ -329,7 +330,8 @@ export function useMenuItems(currentPath: string = "/"): MenuItem[] {
       icon: ClipboardList,
       href: "/admin/screening",
       current: currentPath.startsWith("/admin/screening"),
-      permissions: ["application_read", "application_update"],
+      // application_update 是管理员专属权限，候选人只有 application_read
+      permission: "application_update",
     },
     {
       title: "邮件系统",
@@ -344,17 +346,15 @@ export function useMenuItems(currentPath: string = "/"): MenuItem[] {
       href: "/profile",
       current: currentPath === "/profile",
     },
-    {
-      title: "系统设置",
-      icon: Settings,
-      href: "/settings",
-      current: currentPath.startsWith("/settings"),
-      permission: "systemsetting_read",
-    },
   ];
 
   // 统一基于 permissions 过滤菜单，不再对角色做特判
   return allMenuItems.filter((item) => {
+    // 权限数据还在加载中：只显示无权限要求的菜单项，避免闪烁出现无权限菜单
+    if (isLoading) {
+      return !item.permission && !item.permissions && !item.excludePermission;
+    }
+
     // excludePermission：若用户拥有该权限则隐藏（优先判断）
     if (item.excludePermission && hasPermission(item.excludePermission)) {
       return false;

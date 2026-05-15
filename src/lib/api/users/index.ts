@@ -213,28 +213,28 @@ class UsersApi {
     activeUsers: number
     adminCount: number
     candidateCount: number
-    interviewerCount: number
-    newUsersToday: number
-    newUsersThisWeek: number
   }> {
-    const response = await this.axios.get<{
-      totalUsers: number
-      activeUsers: number
-      adminCount: number
-      candidateCount: number
-      interviewerCount: number
-      newUsersToday: number
-      newUsersThisWeek: number
-    }>('/users/stats')
-    return this.handleResponse<{
-      totalUsers: number
-      activeUsers: number
-      adminCount: number
-      candidateCount: number
-      interviewerCount: number
-      newUsersToday: number
-      newUsersThisWeek: number
-    }>(response)
+    const response = await this.axios.get<any>('/admin/stats/overview')
+    const data = this.handleResponse<any>(response)
+    console.log('[getUserStats] raw response:', response)
+    console.log('[getUserStats] parsed data:', data)
+
+    const overview = data?.overview || {}
+    const usersByRole: Array<{ roleCode: string; count: number }> = data?.usersByRole || []
+
+    const adminCount = usersByRole
+      .filter((r) => r.roleCode === 'super_admin' || r.roleCode === 'club_admin')
+      .reduce((sum, r) => sum + r.count, 0)
+
+    const candidateCount = usersByRole
+      .find((r) => r.roleCode === 'candidate')?.count ?? 0
+
+    return {
+      totalUsers: overview.totalUsers ?? 0,
+      activeUsers: overview.activeUsers ?? 0,
+      adminCount,
+      candidateCount,
+    }
   }
 
 

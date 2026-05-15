@@ -1,6 +1,7 @@
 "use client";
 
 import { useApplicationDetail } from "@/hooks/use-applications";
+import { usePermissions } from "@/hooks/use-permissions";
 import {
   Loader2,
   ArrowLeft,
@@ -30,6 +31,10 @@ export default function ApplicationDetailPage() {
   const params = useParams();
   const router = useRouter();
   const applicationId = params.id as string;
+  const { hasPermission } = usePermissions();
+
+  // 只有拥有 application_update 权限的管理员才能看到 AI 评估结果
+  const canViewAiResult = hasPermission("application_update");
 
   // 使用Hook获取申请详情
   const {
@@ -222,55 +227,35 @@ export default function ApplicationDetailPage() {
                     <span>{application.applicant.name || "-"}</span>
                   </div>
                 )}
-                {/* 只展示实际存在的数据字段 */}
-                {(application.education?.studentId ||
-                  application.formData?.studentId) && (
+                {/* 从 applicant 档案字段读取，后端已展开 profileFields */}
+                {application.applicant?.studentId && (
                   <div className="flex justify-between">
                     <span className="text-gray-600">学号:</span>
-                    <span>
-                      {application.education?.studentId ||
-                        application.formData?.studentId}
-                    </span>
+                    <span>{application.applicant.studentId}</span>
                   </div>
                 )}
-                {(application.education?.phone ||
-                  application.formData?.phone) && (
+                {application.applicant?.phone && (
                   <div className="flex justify-between">
                     <span className="text-gray-600">电话:</span>
-                    <span>
-                      {application.education?.phone ||
-                        application.formData?.phone}
-                    </span>
+                    <span>{application.applicant.phone}</span>
                   </div>
                 )}
-                {(application.education?.college ||
-                  application.formData?.college) && (
+                {application.applicant?.college && (
                   <div className="flex justify-between">
                     <span className="text-gray-600">学院:</span>
-                    <span>
-                      {application.education?.college ||
-                        application.formData?.college}
-                    </span>
+                    <span>{application.applicant.college}</span>
                   </div>
                 )}
-                {(application.education?.major ||
-                  application.formData?.major) && (
+                {application.applicant?.major && (
                   <div className="flex justify-between">
                     <span className="text-gray-600">专业:</span>
-                    <span>
-                      {application.education?.major ||
-                        application.formData?.major}
-                    </span>
+                    <span>{application.applicant.major}</span>
                   </div>
                 )}
-                {(application.education?.grade ||
-                  application.formData?.grade) && (
+                {application.applicant?.grade && (
                   <div className="flex justify-between">
                     <span className="text-gray-600">年级:</span>
-                    <span>
-                      {application.education?.grade ||
-                        application.formData?.grade}
-                    </span>
+                    <span>{application.applicant.grade}</span>
                   </div>
                 )}
               </div>
@@ -279,54 +264,67 @@ export default function ApplicationDetailPage() {
         </CardContent>
       </Card>
 
-      {/* 申请内容 */}
-      {(application.education || application.formData) && (
-        <>
-          <Card className="mb-8">
-            <CardHeader>
-              <CardTitle className="text-lg">申请内容</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              {(application.education?.experience ||
-                application.formData?.experience) && (
-                <div>
-                  <h4 className="font-semibold text-gray-900 mb-2">相关经验</h4>
-                  <p className="text-gray-700 whitespace-pre-wrap">
-                    {application.education?.experience ||
-                      application.formData?.experience}
-                  </p>
-                </div>
-              )}
-              {(application.education?.motivation ||
-                application.formData?.motivation) && (
-                <div>
-                  <h4 className="font-semibold text-gray-900 mb-2">申请动机</h4>
-                  <p className="text-gray-700 whitespace-pre-wrap">
-                    {application.education?.motivation ||
-                      application.formData?.motivation}
-                  </p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </>
-      )}
+      {/* 申请内容：综合 education(申请时填的表单) + 档案中的 experience/motivation */}
+      <Card className="mb-8">
+        <CardHeader>
+          <CardTitle className="text-lg">申请内容</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {(() => {
+            // 合并 education 和 applicant 中的 experience/motivation
+            const edu = (application.education || {}) as Record<string, any>;
+            const merged: Record<string, any> = { ...edu };
+            // 档案中的 experience/motivation 作为补充
+            if (application.applicant?.experience && !merged.experience) {
+              merged.experience = application.applicant.experience;
+            }
+            if (application.applicant?.motivation && !merged.motivation) {
+              merged.motivation = application.applicant.motivation;
+            }
+
+            const labelMap: Record<string, string> = {
+              name: '姓名',
+              phone: '电话',
+              studentId: '学号',
+              college: '学院',
+              major: '专业',
+              grade: '年级',
+              school: '学校',
+              experience: '相关经验',
+              motivation: '申请动机',
+            };
+
+            const entries = Object.entries(merged).filter(([, v]) => v && v !== '');
+
+            if (entries.length === 0) {
+              return <p className="text-gray-400">暂无申请内容</p>;
+            }
+
+            return entries.map(([key, value]) => (
+              <div key={key}>
+                <h4 className="font-semibold text-gray-900 mb-2">{labelMap[key] || key}</h4>
+                <p className="text-gray-700 whitespace-pre-wrap">{String(value)}</p>
+              </div>
+            ));
+          })()}
+        </CardContent>
+      </Card>
 
       {/* 经历和项目经验 */}
-      {application.experiences && application.experiences.length > 0 && (
-        <Card className="mb-8">
-          <CardHeader>
-            <CardTitle className="text-lg">项目经历</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-6">
-              {application.experiences.map((exp, index) => (
+      <Card className="mb-8">
+        <CardHeader>
+          <CardTitle className="text-lg">项目经历</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-6">
+            {application.experiences && application.experiences.length > 0 ? (
+              application.experiences.map((exp, index) => (
                 <div key={index} className="border-l-4 border-blue-500 pl-4">
                   <div className="flex justify-between items-start mb-2">
                     <h4 className="font-semibold text-gray-900">{exp.title}</h4>
                     <span className="text-sm text-gray-500">
-                      {new Date(exp.startDate).toLocaleDateString("zh-CN")} -{" "}
-                      {new Date(exp.endDate).toLocaleDateString("zh-CN")}
+                      {exp.startDate ? new Date(exp.startDate).toLocaleDateString("zh-CN") : "未填写"} -{" "}
+                      {exp.endDate ? new Date(exp.endDate).toLocaleDateString("zh-CN") : "至今"}
                     </span>
                   </div>
 
@@ -380,11 +378,13 @@ export default function ApplicationDetailPage() {
                     </div>
                   )}
                 </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
+              ))
+            ) : (
+              <p className="text-gray-400">未填写</p>
+            )}
+          </div>
+        </CardContent>
+      </Card>
 
       {/* 附件 */}
       {(application as any).files && (application as any).files.length > 0 && (
@@ -462,8 +462,8 @@ export default function ApplicationDetailPage() {
         </Card>
       )}
 
-      {/* AI分析结果：已提交后始终展示此卡片 */}
-      {application.status !== "draft" && (
+      {/* AI分析结果：仅管理员可见 */}
+      {canViewAiResult && application.status !== "draft" && (
         <Card className="mb-8">
           <CardHeader>
             <CardTitle className="text-lg flex items-center gap-2">

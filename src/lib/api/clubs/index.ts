@@ -50,26 +50,65 @@ class ClubsApi {
 
     const response = await axiosService.get<any>(`/clubs?${queryParams}`)
     
-    // 处理API响应，可能是直接Club数组或包装的对象
-    const clubsData = response.data || response
-    
-    if (Array.isArray(clubsData)) {
-      // 直接返回俱乐部数组
+    console.log('[getClubs] params:', { page, limit, search, category, isActive })
+    console.log('[getClubs] raw response:', response)
+    console.log('[getClubs] response type:', Array.isArray(response) ? 'array' : typeof response)
+    if (response && typeof response === 'object' && !Array.isArray(response)) {
+      console.log('[getClubs] response keys:', Object.keys(response))
+      console.log('[getClubs] response.data:', response.data)
+    }
+
+    // axios 拦截器已剥掉 HTTP 层（return response.data），
+    // 所以 response 可能是：
+    //   1. { code, message, data: Club[], success } —— 标准包装格式
+    //   2. { code, message, data: { data: Club[], total, ... }, success } —— 分页包装格式
+    //   3. Club[] —— 后端直接返回数组（无包装）
+    let rawData: any
+    if (Array.isArray(response)) {
+      // 情况 3：直接数组
+      rawData = response
+    } else if (response && typeof response === 'object') {
+      // 情况 1 / 2：标准包装，取 .data 字段
+      rawData = response.data ?? response
+    } else {
+      rawData = response
+    }
+
+    // 客户端兜底过滤（后端可能未处理这些查询参数）
+    const applyFilters = (list: any[]): any[] => {
+      let result = list
+      if (search) {
+        const s = search.toLowerCase()
+        result = result.filter((c) => c.name?.toLowerCase().includes(s))
+      }
+      if (category) {
+        result = result.filter((c) => c.category === category)
+      }
+      if (typeof isActive === 'boolean') {
+        result = result.filter((c) => c.isActive === isActive)
+      }
+      return result
+    }
+
+    if (Array.isArray(rawData)) {
+      // rawData 是 Club 数组
+      const filtered = applyFilters(rawData)
       return {
-        data: clubsData,
-        total: clubsData.length,
-        page: page,
-        limit: limit,
-        totalPages: Math.ceil(clubsData.length / limit)
+        data: filtered,
+        total: filtered.length,
+        page,
+        limit,
+        totalPages: Math.ceil(filtered.length / limit) || 1
       }
     } else {
-      // 包装的对象格式
+      // rawData 是分页对象 { data: Club[], total, page, limit, totalPages }
+      const list = Array.isArray(rawData?.data) ? applyFilters(rawData.data) : []
       return {
-        data: clubsData.data || [],
-        total: clubsData.total || clubsData.pagination?.total || 0,
-        page: clubsData.page || page,
-        limit: clubsData.limit || limit,
-        totalPages: clubsData.totalPages || 1
+        data: list,
+        total: rawData?.total ?? rawData?.pagination?.total ?? list.length,
+        page: rawData?.page ?? page,
+        limit: rawData?.limit ?? limit,
+        totalPages: rawData?.totalPages ?? (Math.ceil(list.length / limit) || 1)
       }
     }
   }

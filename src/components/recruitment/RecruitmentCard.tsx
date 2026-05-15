@@ -40,12 +40,21 @@ export function RecruitmentCard({ recruitment }: RecruitmentCardProps) {
     }
   }
 
+  const now = new Date()
+  const startTime = new Date(recruitment.startTime)
+  const endTime = new Date(recruitment.endTime)
+
+  // 申请开放：状态为已发布或进行中，且已到开始时间，且未超过截止时间
   const isApplicationOpen =
     (recruitment.status === 'published' || recruitment.status === 'ongoing') &&
-    new Date(recruitment.endTime) > new Date()
+    startTime <= now &&
+    endTime > now
+
+  const isExpired = endTime <= now
+  const isNotStarted = startTime > now
 
   const daysLeft = Math.ceil(
-    (new Date(recruitment.endTime).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)
+    (endTime.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
   )
 
   const fillRate = recruitment.maxApplicants > 0
@@ -183,9 +192,11 @@ export function RecruitmentCard({ recruitment }: RecruitmentCardProps) {
             </Link>
           ) : (
             <Button variant="outline" className="w-full" size="sm" disabled>
-              {recruitment.status === 'finished' || recruitment.status === 'archived'
+              {recruitment.status === 'finished' || recruitment.status === 'archived' || isExpired
                 ? '招新已结束'
-                : '招新尚未开始'}
+                : isNotStarted
+                  ? '招新尚未开始'
+                  : '招新已结束'}
             </Button>
           )}
         </div>

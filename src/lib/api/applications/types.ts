@@ -99,6 +99,9 @@ export interface ApplicationDetail extends Application {
     studentId?: string;
     college?: string;
     major?: string;
+    grade?: string;
+    experience?: string;
+    motivation?: string;
   };
   statusHistory: StatusHistoryItem[];
   interviews?: Array<{

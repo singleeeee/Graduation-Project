@@ -129,6 +129,13 @@ function UserManagementPageContent({ user, logout }: UserManagementPageProps) {
     sortOrder: "desc",
   };
 
+  // 获取用户统计数据（全量，不受分页影响）
+  const { data: statsData } = useQuery({
+    queryKey: ["userStats"],
+    queryFn: () => usersApi.getUserStats(),
+    staleTime: 0,
+  });
+
   // 获取用户列表
   const {
     data: usersData,
@@ -219,6 +226,7 @@ function UserManagementPageContent({ user, logout }: UserManagementPageProps) {
     onSuccess: () => {
       toast({ title: "成功", description: "社团管理员账号创建成功" });
       queryClient.invalidateQueries({ queryKey: ["users"] });
+      queryClient.refetchQueries({ queryKey: ["userStats"] });
       setIsCreateClubAdminDialogOpen(false);
       setCreateClubAdminForm({
         email: "",
@@ -242,6 +250,7 @@ function UserManagementPageContent({ user, logout }: UserManagementPageProps) {
     onSuccess: () => {
       toast({ title: "成功", description: "用户删除成功" });
       queryClient.invalidateQueries({ queryKey: ["users"] });
+      queryClient.refetchQueries({ queryKey: ["userStats"] });
       setIsDeleteDialogOpen(false);
       setSelectedUser(null);
     },
@@ -442,7 +451,7 @@ function UserManagementPageContent({ user, logout }: UserManagementPageProps) {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600">总用户数</p>
-                <p className="text-2xl font-bold">{usersData?.total || 0}</p>
+                <p className="text-2xl font-bold">{statsData?.totalUsers ?? usersData?.total ?? 0}</p>
               </div>
               <div className="p-2 bg-blue-100 rounded-lg">
                 <Users className="h-5 w-5 text-blue-600" />
@@ -457,8 +466,7 @@ function UserManagementPageContent({ user, logout }: UserManagementPageProps) {
               <div>
                 <p className="text-sm font-medium text-gray-600">激活用户</p>
                 <p className="text-2xl font-bold">
-                  {usersData?.users?.filter((u) => u.status === "active")
-                    .length || 0}
+                  {statsData?.activeUsers ?? 0}
                 </p>
               </div>
               <div className="p-2 bg-green-100 rounded-lg">
@@ -474,17 +482,7 @@ function UserManagementPageContent({ user, logout }: UserManagementPageProps) {
               <div>
                 <p className="text-sm font-medium text-gray-600">管理员</p>
                 <p className="text-2xl font-bold">
-                  {usersData?.users?.filter((u) => {
-                    const roleCode =
-                      typeof u.role === "object" && u.role?.code
-                        ? u.role.code
-                        : u.role;
-                    return (
-                      roleCode === "admin" ||
-                      roleCode === "system_admin" ||
-                      roleCode === "super_admin"
-                    );
-                  }).length || 0}
+                  {statsData?.adminCount ?? 0}
                 </p>
               </div>
               <div className="p-2 bg-purple-100 rounded-lg">
@@ -500,13 +498,7 @@ function UserManagementPageContent({ user, logout }: UserManagementPageProps) {
               <div>
                 <p className="text-sm font-medium text-gray-600">候选人</p>
                 <p className="text-2xl font-bold">
-                  {usersData?.users?.filter((u) => {
-                    const roleCode =
-                      typeof u.role === "object" && u.role?.code
-                        ? u.role.code
-                        : u.role;
-                    return roleCode === "candidate";
-                  }).length || 0}
+                  {statsData?.candidateCount ?? 0}
                 </p>
               </div>
               <div className="p-2 bg-yellow-100 rounded-lg">

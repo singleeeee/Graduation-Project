@@ -135,6 +135,7 @@ interface User {
   id: string | null;
   name: string | null;
   email: string | null;
+  avatar?: string | null;
   role:
     | string
     | {
@@ -269,15 +270,23 @@ export function DashboardLayout({
                   欢迎回来，{user.name || (theme === "admin" ? "管理员" : "您")}
                 </span>
                 <div
-                  className={`w-8 h-8 ${currentTheme.bg} rounded-full flex items-center justify-center`}
+                  className={`w-8 h-8 ${currentTheme.bg} rounded-full flex items-center justify-center overflow-hidden`}
                 >
-                  <span className="text-white text-sm font-medium">
-                    {user.name
-                      ? user.name.charAt(0).toUpperCase()
-                      : theme === "admin"
-                        ? "A"
-                        : "C"}
-                  </span>
+                  {user.avatar ? (
+                    <img
+                      src={user.avatar}
+                      alt="头像"
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <span className="text-white text-sm font-medium">
+                      {user.name
+                        ? user.name.charAt(0).toUpperCase()
+                        : theme === "admin"
+                          ? "A"
+                          : "C"}
+                    </span>
+                  )}
                 </div>
                 <Button
                   variant="outline"

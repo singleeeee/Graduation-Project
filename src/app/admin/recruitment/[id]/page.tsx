@@ -263,12 +263,14 @@ export default function RecruitmentDetailPage() {
                     结束招新
                   </DropdownMenuItem>
                 )}
-              <DropdownMenuItem asChild>
-                <Link href={`/admin/recruitment/${id}/edit`}>
-                  <Edit className="mr-2 h-4 w-4" />
-                  编辑
-                </Link>
-              </DropdownMenuItem>
+              {recruitment.status === 'draft' && (
+                <DropdownMenuItem asChild>
+                  <Link href={`/admin/recruitment/${id}/edit`}>
+                    <Edit className="mr-2 h-4 w-4" />
+                    编辑
+                  </Link>
+                </DropdownMenuItem>
+              )}
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 className="text-red-600 focus:text-red-600"
@@ -368,22 +370,31 @@ export default function RecruitmentDetailPage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {/* 占位数据，实际应根据 API 返回 */}
               <div>
-                <div className="text-2xl font-bold">--</div>
+                <div className="text-2xl font-bold">
+                  {recruitment._count?.applications ?? recruitment.applicationCount ?? 0}
+                </div>
                 <p className="text-xs text-gray-500">总申请数</p>
               </div>
               <div>
-                <div className="text-2xl font-bold">--</div>
+                <div className="text-2xl font-bold">
+                  {(recruitment.applications ?? []).filter(
+                    (a: any) => a.status === "accepted" || a.status === "offer_sent"
+                  ).length}
+                </div>
                 <p className="text-xs text-gray-500">已通过</p>
               </div>
               <div>
-                <div className="text-2xl font-bold">--</div>
+                <div className="text-2xl font-bold">
+                  {(recruitment.applications ?? []).filter(
+                    (a: any) => a.status === "interview_scheduled" || a.status === "interview_completed"
+                  ).length}
+                </div>
                 <p className="text-xs text-gray-500">待面试</p>
               </div>
             </div>
             <Button className="w-full mt-4" variant="outline" asChild>
-              <Link href={`/admin/applications?recruitmentId=${id}`}>
+              <Link href={`/admin/screening?recruitmentId=${id}`}>
                 查看申请管理
               </Link>
             </Button>

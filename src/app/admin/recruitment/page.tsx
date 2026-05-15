@@ -388,14 +388,16 @@ export default function RecruitmentListPage() {
                               查看详情
                             </DropdownMenuItem>
                             <DropdownMenuItem
-                              onClick={() =>
-                                router.push(
-                                  `/admin/recruitment/${recruitment.id}/edit`,
-                                )
-                              }
+                              disabled={recruitment.status !== 'draft'}
+                              onClick={() => {
+                                if (recruitment.status === 'draft') {
+                                  router.push(`/admin/recruitment/${recruitment.id}/edit`);
+                                }
+                              }}
+                              className={recruitment.status !== 'draft' ? 'opacity-50 cursor-not-allowed' : ''}
                             >
                               <Edit className="mr-2 h-4 w-4" />
-                              编辑
+                              编辑{recruitment.status !== 'draft' && '（仅草稿可编辑）'}
                             </DropdownMenuItem>
                             <DropdownMenuItem
                               className="text-red-600 focus:text-red-600"

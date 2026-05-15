@@ -6,6 +6,7 @@ interface AppState {
     id: string | null
     name: string | null
     email: string | null
+    avatar?: string | null
     role: string | {
     id: string
     name: string
@@ -31,6 +32,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     id: null,
     name: null,
     email: null,
+    avatar: null,
     role: null,
     permissions: []
   },
@@ -65,6 +67,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         id: null,
         name: null,
         email: null,
+        avatar: null,
         role: null,
         permissions: [],
         roleCode: undefined

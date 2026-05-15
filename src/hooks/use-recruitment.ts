@@ -47,7 +47,7 @@ export function useRecruitment(id: string) {
     queryKey: ["recruitment", id],
     queryFn: () => recruitmentApi.getRecruitment(id),
     enabled: !!id,
-    staleTime: 5 * 60 * 1000, // 5分钟缓存
+    staleTime: 30 * 1000, // 30秒缓存，确保统计数据及时更新
     select: (data) => data.data,
   });
 }

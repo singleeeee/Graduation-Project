@@ -1,20 +1,27 @@
 'use client'
 
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { useAppStore } from '@/store'
 import { useMenuItems } from '@/hooks/use-permissions'
 import { AuthGuard } from '@/components/auth/AuthGuard'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
+import { logout as authLogout } from '@/lib/auth'
 
 interface ApplicationsLayoutProps {
   children: React.ReactNode
 }
 
 function ApplicationsLayoutWrapper({ children }: ApplicationsLayoutProps) {
-  const { user, logout, isAdmin } = useAppStore()
+  const { user, isAdmin } = useAppStore()
+  const router = useRouter()
   const pathname = usePathname()
   const menuItems = useMenuItems(pathname)
   
+  const handleLogout = async () => {
+    await authLogout()
+    router.replace('/login')
+  }
+
   // 根据用户角色确定主题
   const theme = isAdmin() ? 'admin' : 'candidate'
   
@@ -27,7 +34,7 @@ function ApplicationsLayoutWrapper({ children }: ApplicationsLayoutProps) {
   return (
     <DashboardLayout
       user={user}
-      logout={logout}
+      logout={handleLogout}
       menuItems={menuItems}
       title={getTitle()}
       theme={theme}

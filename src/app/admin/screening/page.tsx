@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   useApplications,
   useApplicationDetail,
@@ -8,6 +9,7 @@ import {
   useTriggerAiEvaluate,
 } from "@/hooks/use-applications";
 import { usePermissions } from "@/hooks/use-permissions";
+import { useAppStore } from "@/store";
 import { useQueryClient } from "@tanstack/react-query";
 import { useRegistrationFields } from "@/hooks/use-registration-fields";
 import { useRecruitments } from "@/hooks/use-recruitment";
@@ -144,13 +146,23 @@ const ACTION_LABELS: Partial<Record<ApplicationStatus, string>> = {
  * 管理员可以高效地管理和评估大量申请者简历
  */
 export default function ResumeScreeningPage() {
-  usePermissions(); // 保留权限上下文
+  const { hasPermission, userProfile } = usePermissions();
+  const { user } = useAppStore();
+
+  // 是否是超级管理员（可以看所有社团）
+  const isSuperAdmin = hasPermission("club_manage");
+  // 当前用户所属社团 ID（club_admin 专属）
+  const currentUserClubId: string =
+    (userProfile as any)?.clubId ?? (user as any)?.clubId ?? "";
+
+  const searchParams = useSearchParams();
+  const urlRecruitmentId = searchParams.get("recruitmentId") ?? "";
 
   // ─── 筛选状态 ───────────────────────────────────────────────
   const [filters, setFilters] = useState({
     search: "",
     status: "all" as ApplicationStatus | "all",
-    recruitmentId: "",
+    recruitmentId: urlRecruitmentId,
     clubId: "",
     minScore: "",
     maxScore: "",
@@ -186,16 +198,28 @@ export default function ResumeScreeningPage() {
   const { data: allRegistrationFields = [] } = useRegistrationFields();
   const { data: recruitmentsData } = useRecruitments();
 
-  // 自动默认选中第一个社团
+  // 自动默认选中社团
+  // - 非超级管理员（club_admin）：直接锁定到自己的 clubId，不允许切换
+  // - 超级管理员：有 URL recruitmentId 时找对应社团，否则选第一个
   useEffect(() => {
     if (!recruitmentsData?.data?.length) return;
     setFilters((prev) => {
       if (prev.clubId) return prev;
+      // club_admin：强制锁定到自己的社团
+      if (!isSuperAdmin && currentUserClubId) {
+        return { ...prev, clubId: currentUserClubId };
+      }
+      // 超级管理员：优先 URL 参数，否则选第一个
+      if (urlRecruitmentId) {
+        const matched = recruitmentsData.data.find((r) => r.id === urlRecruitmentId);
+        const clubId = matched?.club?.id;
+        if (clubId) return { ...prev, clubId };
+      }
       const firstClubId = recruitmentsData.data[0].club?.id;
       if (!firstClubId) return prev;
       return { ...prev, clubId: firstClubId };
     });
-  }, [recruitmentsData]);
+  }, [recruitmentsData, urlRecruitmentId, isSuperAdmin, currentUserClubId]);
 
   const { data, isLoading, error } = useApplications({
     status: filters.status !== "all" ? filters.status : undefined,
@@ -411,10 +435,14 @@ export default function ResumeScreeningPage() {
               </div>
 
               <div className="flex gap-2 flex-wrap">
-                {/* 社团筛选 */}
+                {/* 社团筛选：超级管理员可切换，club_admin 锁定到自己的社团 */}
                 <Select
                   value={filters.clubId}
-                  onValueChange={(v) => setFilters((p) => ({ ...p, clubId: v, recruitmentId: "" }))}
+                  onValueChange={(v) => {
+                    if (!isSuperAdmin) return; // 非超级管理员不允许切换
+                    setFilters((p) => ({ ...p, clubId: v, recruitmentId: "" }));
+                  }}
+                  disabled={!isSuperAdmin}
                 >
                   <SelectTrigger className="w-[140px]">
                     <SelectValue placeholder="选择社团" />
@@ -422,7 +450,10 @@ export default function ResumeScreeningPage() {
                   <SelectContent>
                     {Array.from(
                       new Map(
-                        (recruitmentsData?.data ?? []).map((r: any) => [r.club.id, r.club])
+                        (recruitmentsData?.data ?? [])
+                          // 非超级管理员只显示自己的社团
+                          .filter((r: any) => isSuperAdmin || r.club.id === currentUserClubId)
+                          .map((r: any) => [r.club.id, r.club])
                       ).values()
                     ).map((club: any) => (
                       <SelectItem key={club.id} value={club.id}>{club.name}</SelectItem>
@@ -598,9 +629,9 @@ export default function ResumeScreeningPage() {
                       </TableRow>
                     ) : (
                       filteredApplications.map((application) => {
-                        const statusStyle = STATUS_STYLES[application.status];
-                        const StatusIcon = statusStyle.icon;
                         const transitions = TRANSITIONS[application.status] ?? [];
+                        const safeStatusStyle = STATUS_STYLES[application.status] ?? { className: "bg-gray-100 text-gray-600 border-gray-300", icon: Clock };
+                        const SafeStatusIcon = safeStatusStyle.icon;
 
                         return (
                           <TableRow key={application.id} className="hover:bg-gray-50">
@@ -646,10 +677,10 @@ export default function ResumeScreeningPage() {
                             <TableCell>
                               <Badge
                                 variant="outline"
-                                className={`flex items-center gap-1 w-fit ${statusStyle.className}`}
+                                className={`flex items-center gap-1 w-fit ${safeStatusStyle.className}`}
                               >
-                                <StatusIcon className="h-3 w-3" />
-                                {STATUS_LABELS[application.status]}
+                                <SafeStatusIcon className="h-3 w-3" />
+                                {STATUS_LABELS[application.status] ?? application.status}
                               </Badge>
                             </TableCell>
                             <TableCell className="text-right">

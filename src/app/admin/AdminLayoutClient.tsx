@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { useMenuItems } from "@/hooks/use-permissions";
 import { logout } from "@/lib/auth";
@@ -12,6 +13,7 @@ export function AdminLayoutClient({ children }: { children: React.ReactNode }) {
   const { user, isAuthenticated } = useAppStore();
   const router = useRouter();
   const currentPath = usePathname();
+  const queryClient = useQueryClient();
 
   // 如果用户未认证，重定向到登录页
   useEffect(() => {
@@ -24,6 +26,8 @@ export function AdminLayoutClient({ children }: { children: React.ReactNode }) {
 
   const handleLogout = async () => {
     try {
+      // 清除 React Query 缓存，防止旧账号权限/数据残留
+      queryClient.clear();
       // 使用完整的退出流程
       await logout();
       // 退出后重定向到登录页

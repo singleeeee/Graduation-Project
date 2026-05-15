@@ -44,6 +44,11 @@ export interface RecruitmentBatch {
   _count: {
     applications: number
   }
+  applications?: Array<{
+    id: string
+    status: string
+    createdAt: string
+  }>
 }
 
 

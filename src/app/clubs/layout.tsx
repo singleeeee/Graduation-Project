@@ -7,52 +7,42 @@ import { AuthGuard } from '@/components/auth/AuthGuard'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { logout as authLogout } from '@/lib/auth'
 
-interface RecruitmentLayoutProps {
+interface ClubsLayoutProps {
   children: React.ReactNode
 }
 
-function RecruitmentDashboardWrapper({ children }: RecruitmentLayoutProps) {
-  const { user, isAdmin, isCandidate, isInterviewer } = useAppStore()
+function ClubsLayoutWrapper({ children }: ClubsLayoutProps) {
+  const { user, isAdmin } = useAppStore()
   const router = useRouter()
   const pathname = usePathname()
   const menuItems = useMenuItems(pathname)
-  
-  // 根据用户角色确定主题类型
-  const getTheme = () => {
-    if (isAdmin()) return 'admin'
-    if (isInterviewer()) return 'admin' // 面试官也使用admin主题
-    return 'candidate'
-  }
-  
-  // 根据用户角色确定标题
-  const getTitle = () => {
-    return '招新信息'
-  }
 
   const handleLogout = async () => {
     await authLogout()
     router.replace('/login')
   }
 
+  const theme = isAdmin() ? 'admin' : 'candidate'
+
   return (
     <DashboardLayout
       user={user}
       logout={handleLogout}
       menuItems={menuItems}
-      title={getTitle()}
-      theme={getTheme()}
+      title="社团管理"
+      theme={theme}
     >
       {children}
     </DashboardLayout>
   )
 }
 
-export default function RecruitmentLayout({ children }: RecruitmentLayoutProps) {
+export default function ClubsLayout({ children }: ClubsLayoutProps) {
   return (
     <AuthGuard requireAuth>
-      <RecruitmentDashboardWrapper>
+      <ClubsLayoutWrapper>
         {children}
-      </RecruitmentDashboardWrapper>
+      </ClubsLayoutWrapper>
     </AuthGuard>
   )
 }

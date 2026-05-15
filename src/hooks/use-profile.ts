@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "./use-toast";
 import { usersApi } from "@/lib/api";
+import { useAppStore } from "@/store";
 import type {
   UserProfile,
   ProfileFieldsConfigResponse,
@@ -9,18 +10,24 @@ import type {
 } from "@/lib/api/users/types";
 
 export function useProfile() {
+  const { user } = useAppStore();
   return useQuery({
     queryKey: ["profile"],
     queryFn: () => usersApi.getProfile(),
     staleTime: 5 * 60 * 1000, // 5 minutes
+    enabled: !!user?.id, // 只在已登录时请求
+    retry: 1,
   });
 }
 
 export function useProfileFieldsConfig() {
+  const { user } = useAppStore();
   return useQuery({
     queryKey: ["profile-fields-config"],
     queryFn: () => usersApi.getProfileFieldsConfig(),
     staleTime: 10 * 60 * 1000, // 10 minutes
+    enabled: !!user?.id,
+    retry: 1,
   });
 }
 

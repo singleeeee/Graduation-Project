@@ -18,6 +18,8 @@ export async function loginAndSetUser(email: string, password: string) {
     
     const userProfile = loginResponse.user
     console.log('loginAndSetUser: 获取用户资料成功', { userProfile })
+    console.log('loginAndSetUser: role 对象', JSON.stringify(userProfile.role))
+    console.log('loginAndSetUser: 顶层 permissions', JSON.stringify(userProfile.permissions))
     
     // 确保角色信息被正确处理
     let roleValue: any = null
@@ -33,8 +35,11 @@ export async function loginAndSetUser(email: string, password: string) {
     const { setUser } = useAppStore.getState()
     let userPermissions: string[] = []
     
-    // 从角色对象中提取权限（兼容字符串数组和对象数组两种格式）
-    if (roleValue && typeof roleValue === 'object' && roleValue.permissions) {
+    // 优先使用顶层 permissions（后端直接返回的权限列表）
+    if (Array.isArray(userProfile.permissions) && userProfile.permissions.length > 0) {
+      userPermissions = userProfile.permissions
+    } else if (roleValue && typeof roleValue === 'object' && roleValue.permissions) {
+      // 从角色对象中提取权限（兼容字符串数组和对象数组两种格式）
       const perms = roleValue.permissions
       if (Array.isArray(perms)) {
         userPermissions = perms.map((p: any) =>
@@ -43,10 +48,13 @@ export async function loginAndSetUser(email: string, password: string) {
       }
     }
     
+    console.log('loginAndSetUser: 最终 userPermissions', userPermissions)
+    
     setUser({
       id: userProfile.id,
       name: userProfile.name,
       email: userProfile.email,
+      avatar: userProfile.avatar,
       role: roleValue,
       permissions: userPermissions
     })
@@ -150,10 +158,19 @@ export async function initializeAuth(): Promise<boolean> {
       }
     }
     
+    // 优先使用顶层 permissions（getProfile 直接返回的权限列表）
+    // getProfile 返回的 role 是字符串，permissions 在顶层字段
+    if (Array.isArray(userProfile.permissions) && userProfile.permissions.length > 0) {
+      userPermissions = userProfile.permissions
+    }
+    
+    console.log('initializeAuth: roleValue =', roleValue, '| userPermissions =', userPermissions)
+    
     setUser({
       id: userProfile.id,
       name: userProfile.name,
       email: userProfile.email,
+      avatar: userProfile.avatar,
       role: roleValue,
       permissions: userPermissions
     })
@@ -189,10 +206,16 @@ export async function initializeAuth(): Promise<boolean> {
             }
           }
           
+          // 优先使用顶层 permissions
+          if (Array.isArray(userProfile.permissions) && userProfile.permissions.length > 0) {
+            userPermissions = userProfile.permissions
+          }
+          
           setUser({
             id: userProfile.id,
             name: userProfile.name,
             email: userProfile.email,
+            avatar: userProfile.avatar,
             role: roleValue,
             permissions: userPermissions
           })

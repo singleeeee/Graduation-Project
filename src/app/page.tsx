@@ -13,7 +13,7 @@ import { usePermissions } from "@/hooks/use-permissions";
 export default function Home() {
   const router = useRouter();
   const { user } = useAppStore();
-  const { hasPermission } = usePermissions();
+  const { hasPermission, hasAnyPermission, isLoading: permissionsLoading } = usePermissions();
   // 用响应式 state 追踪认证状态，避免静态 if 判断
   const [authStatus, setAuthStatus] = useState<"loading" | "authenticated" | "unauthenticated">("loading");
 
@@ -35,7 +35,7 @@ export default function Home() {
     router.replace("/login");
   };
 
-  if (authStatus === "loading") {
+  if (authStatus === "loading" || permissionsLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
         <div className="flex flex-col items-center space-y-2">
@@ -51,8 +51,8 @@ export default function Home() {
   }
 
   // 已认证，根据权限展示对应页面
-  // 拥有 recruitment_read 权限的用户进入管理员仪表盘
-  const isAdmin = hasPermission("recruitment_read") || hasPermission("user_read");
+  // 候选人只有 recruitment_read，管理员才有 recruitment_update / user_read
+  const isAdmin = hasAnyPermission(["recruitment_update", "user_read", "recruitment_create"]);
 
   if (isAdmin) {
     return <AdminDashboard user={user} logout={handleLogout} />;

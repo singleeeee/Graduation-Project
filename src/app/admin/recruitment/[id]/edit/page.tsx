@@ -37,7 +37,6 @@ import { Plus, Trash2 } from "lucide-react";
 // customQuestions.id 是可选的，后端有时候不返回 id 字段
 const updateBatchSchema = z.object({
   title: z.string().min(1, "标题是必填项"),
-  clubId: z.string().min(1, "社团ID是必填项"),
   description: z.string().min(1, "描述是必填项"),
   startTime: z.string().min(1, "开始时间是必填项"),
   endTime: z.string().min(1, "结束时间是必填项"),
@@ -85,7 +84,6 @@ export default function EditRecruitmentPage() {
     resolver: zodResolver(updateBatchSchema),
     defaultValues: {
       title: "",
-      clubId: "",
       description: "",
       startTime: "",
       endTime: "",
@@ -101,11 +99,9 @@ export default function EditRecruitmentPage() {
     name: "customQuestions",
   });
 
-  // 第一步：recruitment 数据到达时立即填充所有字段（含 clubId）
-  // reset 时不触发校验（keepErrors:false），避免 clubId 空字符串瞬间报错
+  // recruitment 数据到达时填充表单字段
   React.useEffect(() => {
     if (!recruitment) return;
-    const clubId = recruitment.clubId || (recruitment as any).club?.id || "";
     const customQuestions = (recruitment.customQuestions || []).map((q: any) => ({
       id: q.id || undefined,
       question: q.question || "",
@@ -118,7 +114,6 @@ export default function EditRecruitmentPage() {
     reset(
       {
         title: recruitment.title || "",
-        clubId,
         description: recruitment.description || "",
         startTime: recruitment.startTime
           ? new Date(recruitment.startTime).toISOString().slice(0, 16)
@@ -130,24 +125,14 @@ export default function EditRecruitmentPage() {
         requiredFields: recruitment.requiredFields || [],
         customQuestions,
       },
-      { keepErrors: false }  // 重置时清除所有错误，避免空 clubId 触发报错
+      { keepErrors: false }
     );
   }, [recruitment, reset]);
 
-  // 第二步：clubs 列表就绪后，重新 setValue 让 Radix Select 识别已选中的 option
-  // Radix Select 需要 options 挂载后才能匹配 value，所以延一帧再设一次
-  React.useEffect(() => {
-    if (!recruitment || isClubsLoading || clubs.length === 0) return;
-    const clubId = recruitment.clubId || (recruitment as any).club?.id || "";
-    if (!clubId) return;
-    const timer = setTimeout(() => {
-      setValue("clubId", clubId, { shouldValidate: false });
-    }, 0);
-    return () => clearTimeout(timer);
-  }, [recruitment, clubs, isClubsLoading, setValue]);
-
   const watchedRequiredFields = watch("requiredFields") || [];
-  const watchedClubId = watch("clubId");
+  // clubId 从 recruitment 原始数据读取，不走表单字段
+  const currentClubId = recruitment?.clubId || (recruitment as any)?.club?.id || "";
+  const currentClubName = clubs.find((c: Club) => c.id === currentClubId)?.name || currentClubId;
 
   const handleFieldCheckboxChange = (fieldName: string, checked: boolean) => {
     const currentFields = getValues("requiredFields") || [];
@@ -175,6 +160,7 @@ export default function EditRecruitmentPage() {
   const onSubmit = async (data: FormData) => {
     const processedData: CreateRecruitmentBatchRequest = {
       ...data,
+      clubId: currentClubId,  // 编辑时社团不可更改，直接用原始值
       requiredFields: data.requiredFields || [],
       customQuestions: (data.customQuestions || []).map((q) => ({
         id: q.id || "",
@@ -232,6 +218,25 @@ export default function EditRecruitmentPage() {
     );
   }
 
+  if (recruitment.status !== 'draft') {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center space-y-3">
+          <p className="text-gray-800 font-medium">该招新批次不可编辑</p>
+          <p className="text-gray-500 text-sm">只有草稿状态的批次才能编辑，当前状态为「{
+            { published: '已发布', ongoing: '进行中', finished: '已结束', archived: '已存档' }[recruitment.status] ?? recruitment.status
+          }」</p>
+          <button
+            onClick={() => router.back()}
+            className="mt-2 text-blue-600 hover:underline text-sm"
+          >
+            返回
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -263,31 +268,10 @@ export default function EditRecruitmentPage() {
             </div>
 
             <div>
-              <Label htmlFor="clubId">选择社团</Label>
-              {isClubsLoading ? (
-                <p>加载社团列表中...</p>
-              ) : (
-                <Select
-                  value={watchedClubId || ""}
-                  onValueChange={(value) => setValue("clubId", value, { shouldValidate: true })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="请选择社团" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {clubs.map((club: Club) => (
-                      <SelectItem key={club.id} value={club.id}>
-                        {club.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
-              {errors.clubId && (
-                <p className="text-red-500 text-sm mt-1">
-                  {errors.clubId.message}
-                </p>
-              )}
+              <Label>所属社团</Label>
+              <div className="mt-1 px-3 py-2 rounded-md border border-input bg-muted text-sm text-muted-foreground">
+                {isClubsLoading ? "加载中..." : (currentClubName || "未知社团")}
+              </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
